@@ -10,6 +10,7 @@ import { globalLimiter, limitersEnabled } from './middleware/rateLimit.js';
 
 import authRoutes from './routes/auth.js';
 import assetsRoutes from './routes/assets.js';
+import farmRoutes from './routes/farm.js';
 import minigamesRoutes from './routes/minigames.js';
 import miningRoutes from './routes/mining.js';
 import usersRoutes from './routes/users.js';
@@ -18,11 +19,12 @@ import { startMiningPayoutCron } from './services/miningPayout.js';
 const app = express();
 
 /**
- * Hosting platforms (Railway, Fly, Render) terminate TLS at a proxy, so the
- * client IP arrives in X-Forwarded-For. Trusting exactly one hop lets the rate
- * limiter see real IPs without letting clients spoof the header themselves.
+ * Proxy trust governs whether `req.ip` — and therefore every IP-keyed rate
+ * limit — can be forged via `X-Forwarded-For`. It must describe the actual
+ * deployment, so it is configuration rather than a hard-coded guess.
+ * Defaults to trusting nobody. See TRUST_PROXY_HOPS in config/env.js.
  */
-app.set('trust proxy', 1);
+app.set('trust proxy', env.TRUST_PROXY_HOPS === 0 ? false : env.TRUST_PROXY_HOPS);
 
 // Do not advertise the framework.
 app.disable('x-powered-by');
@@ -68,7 +70,7 @@ const corsOptions = {
     // in logs instead of silently omitting CORS headers.
     return callback(new Error(`Origin not allowed by CORS: ${origin}`));
   },
-  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   // No cookies are used; keeping this false avoids the credentialed-CORS rules.
   credentials: false,
@@ -96,6 +98,7 @@ app.get('/health', (_req, res) => {
 /* ── Routes ── */
 app.use('/api/auth', authRoutes);
 app.use('/api/assets', assetsRoutes);
+app.use('/api/farm', farmRoutes);
 app.use('/api/minigames', minigamesRoutes);
 app.use('/api/mining', miningRoutes);
 app.use('/api/users', usersRoutes);
@@ -152,6 +155,11 @@ async function start() {
     console.log(
       `[api] email verification required for economy routes: ${env.REQUIRE_VERIFIED_EMAIL}`
     );
+    console.log(
+      `[api] trusted proxy hops: ${env.TRUST_PROXY_HOPS}` +
+        (env.TRUST_PROXY_HOPS === 0 ? ' (client IP taken from the socket)' : '')
+    );
+    console.log(`[api] synthetic network power: ${env.NETWORK_POWER_BASELINE} W/s`);
   });
 }
 

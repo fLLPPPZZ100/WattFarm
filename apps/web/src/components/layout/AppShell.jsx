@@ -9,7 +9,7 @@ import {
   shutdown as shutdownGame,
   setPlacementCallback,
 } from '../../game/GameInstance.js';
-import { usePlacementStore } from '../../store/placementStore.js';
+import { usePlacementStore, resetPlacementStore } from '../../store/placementStore.js';
 import vltCoinImg from '../../assets/coins/vlt-coin.png';
 import btcCoinImg from '../../assets/coins/btc-coin.png';
 import trxCoinImg from '../../assets/coins/trx-coin.png';
@@ -39,7 +39,7 @@ const CYCLE_SECONDS = 600; // 10 minutes
 export default function AppShell() {
   const { user, logout } = useAuth();
   const { vltBalance, assets, fetchMining } = useAssetsStore();
-  const { placedSolar, placedMount } = usePlacementStore();
+  const { placedSolar, placedMount, powerRate, networkBaseline } = usePlacementStore();
   const [activeCurrency, setActiveCurrency] = useState('VLT');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [countdown, setCountdown] = useState(CYCLE_SECONDS);
@@ -63,8 +63,13 @@ export default function AppShell() {
     if (!user) return undefined;
 
     bootGame(user.uid);
-    setPlacementCallback(function (solarPlaced, mountPlaced) {
-      usePlacementStore.setState({ placedSolar: solarPlaced, placedMount: mountPlaced });
+    setPlacementCallback(function (solarPlaced, mountPlaced, powerRate, networkBaseline) {
+      usePlacementStore.getState().setPlacement({
+        placedSolar: solarPlaced,
+        placedMount: mountPlaced,
+        powerRate: powerRate,
+        networkBaseline: networkBaseline,
+      });
     });
 
     return function () {
@@ -102,10 +107,20 @@ export default function AppShell() {
   var sec = countdown % 60;
   var countdownStr = min + ':' + (sec < 10 ? '0' : '') + sec;
 
-  // Power panel values
+  /**
+   * Power panel values.
+   *
+   * `powerRate` comes from the game and already includes mount bonuses, so it is
+   * no longer `panels x 1`. The estimated reward is the player's share of the
+   * fixed budget against the synthetic network baseline — the same formula the
+   * server uses at payout — because output on its own says nothing about income.
+   */
   var activeSolar = placedSolar || 0;
-  var totalPower = activeSolar * 1;
-  var blockReward = totalPower * 0.05;
+  var totalPower = powerRate || 0;
+  var networkTotal = totalPower + (networkBaseline || 0);
+  var networkShare = networkTotal > 0 ? totalPower / networkTotal : 0;
+  var BUDGET_PER_CYCLE = 50;
+  var blockReward = networkShare * BUDGET_PER_CYCLE;
 
   /**
    * Clears all per-user client state before signing out. Without this the next
@@ -114,7 +129,7 @@ export default function AppShell() {
    */
   function handleLogout() {
     resetAssetsStore();
-    usePlacementStore.setState({ placedSolar: 0, placedMount: 0 });
+    resetPlacementStore();
     logout();
   }
 
@@ -242,10 +257,25 @@ export default function AppShell() {
             <>
               {/* LEFT: Power Panel */}
               <div className="absolute left-4 top-4 z-10 hidden lg:block">
-                <div className="flex flex-col gap-3 bg-bg-panel/80 backdrop-blur-sm border border-line-dusk rounded-xl p-4 w-[160px]">
+                <div className="flex flex-col gap-3 bg-bg-panel/80 backdrop-blur-sm border border-line-dusk rounded-xl p-4 w-[176px]">
                   <div>
-                    <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Active Power</p>
+                    <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Your Power</p>
                     <p className="font-mono text-sm text-accent-current">{totalPower.toFixed(1)} W/s</p>
+                    <p className="text-[10px] text-text-muted mt-0.5">{activeSolar} panels placed</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Network Power</p>
+                    <p className="font-mono text-sm text-text-primary">{networkTotal.toFixed(1)} W/s</p>
+                    {/* Share bar — the payout is proportional to this. */}
+                    <div className="mt-1 h-1.5 w-full bg-bg-abyss border border-line-dusk">
+                      <div
+                        className="h-full bg-accent-current"
+                        style={{ width: Math.min(100, networkShare * 100).toFixed(1) + '%' }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-accent-current mt-0.5 font-mono">
+                      {(networkShare * 100).toFixed(1)}% share
+                    </p>
                   </div>
                   <div>
                     <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Next Payout</p>
@@ -253,7 +283,7 @@ export default function AppShell() {
                   </div>
                   <div>
                     <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Est. Reward</p>
-                    <p className="font-mono text-sm text-accent-watt">{blockReward.toFixed(1)} VLT</p>
+                    <p className="font-mono text-sm text-accent-watt">{blockReward.toFixed(2)} VLT</p>
                   </div>
                 </div>
               </div>

@@ -85,18 +85,87 @@ if (credentialSources.length === 0) {
   );
 }
 
+/* ── Proxy trust ── */
+/**
+ * Number of reverse proxies in front of the API.
+ *
+ * This directly controls whether `req.ip` can be forged. Express derives the
+ * client address from `X-Forwarded-For` when proxies are trusted, and a client
+ * can put anything in that header. A previous revision hard-coded a value of 1,
+ * which meant that running the API without a proxy in front of it (local
+ * development, or a direct deployment) let anyone reset their own rate-limit
+ * counter by rotating the header.
+ *
+ * 0 — trust nobody; use the socket address. Correct when the API is exposed
+ *     directly. This is the default.
+ * n — trust exactly n hops. Set this to match the hosting platform
+ *     (Railway/Render/Fly typically terminate TLS at one proxy, so n = 1).
+ */
+const rawTrustProxy = process.env.TRUST_PROXY_HOPS ?? '0';
+const TRUST_PROXY_HOPS = Number.parseInt(rawTrustProxy, 10);
+if (!Number.isInteger(TRUST_PROXY_HOPS) || TRUST_PROXY_HOPS < 0 || TRUST_PROXY_HOPS > 10) {
+  problems.push(
+    `TRUST_PROXY_HOPS must be an integer between 0 and 10 (received "${rawTrustProxy}")`
+  );
+}
+
 /* ── Security toggles ── */
-// When true, every authenticated request asks Firebase whether the token was
-// revoked. Correct but adds a network round trip, so it is opt-in per route
-// via `verifyAuth.strict` rather than applied globally.
+// When true, state-changing routes ask Firebase whether the token was revoked.
+// Adds a network round trip, so it is applied per route via verifyAuthStrict
+// rather than globally.
 const CHECK_REVOKED_TOKENS = process.env.CHECK_REVOKED_TOKENS !== 'false';
 
-// Whether spending/earning routes demand a verified email address.
-// Defaults to enabled in production, disabled in development so local testing
-// does not require a working mail flow.
-const REQUIRE_VERIFIED_EMAIL = process.env.REQUIRE_VERIFIED_EMAIL
-  ? process.env.REQUIRE_VERIFIED_EMAIL === 'true'
-  : isProduction;
+/**
+ * Whether routes that earn or spend VLT demand a verified email address.
+ *
+ * Secure by default: enabled unless explicitly switched off. This previously
+ * defaulted to `isProduction`, which meant a deployment that forgot to set
+ * NODE_ENV silently ran with the check disabled. Security defaults should not
+ * depend on a variable that is easy to omit.
+ *
+ * Local development typically wants REQUIRE_VERIFIED_EMAIL=false.
+ */
+const REQUIRE_VERIFIED_EMAIL = process.env.REQUIRE_VERIFIED_EMAIL !== 'false';
+
+// Loudly flag the insecure combination rather than letting it pass unnoticed.
+if (isProduction && !REQUIRE_VERIFIED_EMAIL) {
+  console.warn(
+    '[config] WARNING: REQUIRE_VERIFIED_EMAIL=false in production. ' +
+      'Anyone can register with someone else’s address and move currency.'
+  );
+}
+
+/* ── Economy ── */
+/**
+ * Synthetic network power, in W/s, standing in for "everyone else mining".
+ *
+ * The payout splits a fixed budget by power share. With a single real player a
+ * plain proportional split always awards the entire budget, so building more
+ * changed nothing — the observed symptom was 5,745 W and 17,784 W both paying
+ * exactly 50 VLT. This baseline makes the share meaningful from the first
+ * panel, with naturally diminishing returns:
+ *
+ *   share = rate / (rate + baseline) x budget
+ *
+ * It is the difficulty knob: higher means slower progression. Simulated, with
+ * the starting grant and a 50 VLT budget per cycle:
+ *
+ *   baseline   5 panels   20 panels   full grid   income at full grid
+ *         10       1.5h        4.0h        7.8h   85% of budget
+ *         40       4.2h       10.3h       16.8h   58% of budget
+ *         60       6.0h       14.7h       23.0h   48% of budget
+ *
+ * 40 is the default: a full grid takes a couple of evenings rather than an
+ * afternoon, and it still leaves 42% of the budget unclaimed so future tiers
+ * and grid expansions have somewhere to go.
+ */
+const rawBaseline = process.env.NETWORK_POWER_BASELINE ?? '40';
+const NETWORK_POWER_BASELINE = Number.parseFloat(rawBaseline);
+if (!Number.isFinite(NETWORK_POWER_BASELINE) || NETWORK_POWER_BASELINE < 0) {
+  problems.push(
+    `NETWORK_POWER_BASELINE must be a non-negative number (received "${rawBaseline}")`
+  );
+}
 
 /* ── Report and abort ── */
 if (problems.length > 0) {
@@ -123,11 +192,13 @@ export const env = Object.freeze({
   DATABASE_URL,
   PORT,
   CORS_ORIGINS,
+  TRUST_PROXY_HOPS,
   GOOGLE_APPLICATION_CREDENTIALS,
   FIREBASE_SERVICE_ACCOUNT_JSON,
   USE_APPLICATION_DEFAULT_CREDENTIALS,
   CHECK_REVOKED_TOKENS,
   REQUIRE_VERIFIED_EMAIL,
+  NETWORK_POWER_BASELINE,
 });
 
 export default env;
