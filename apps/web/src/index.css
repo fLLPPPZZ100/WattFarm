@@ -7,7 +7,19 @@
     font-family: 'Inter', sans-serif;
   }
 
-  img {
+  /**
+   * Pixel art rendering is opt-in, not global.
+   *
+   * `image-rendering: pixelated` applied to every image was actively harmful:
+   * it is correct when *enlarging* a sprite, but when reducing one it discards
+   * pixels instead of averaging them, so a 32px coin drawn at 18px lost parts
+   * of its outline. Reduced sprites look better with the browser's smooth
+   * filter.
+   *
+   * Use the PixelImage component, which picks the right mode from the scale and
+   * snaps the size to a whole-pixel ratio.
+   */
+  .pixelated {
     image-rendering: crisp-edges;
     image-rendering: pixelated;
   }

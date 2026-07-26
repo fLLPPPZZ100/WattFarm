@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAssetsStore } from '../store/assetsStore';
 import { metaFor, categoryOf } from '../data/items.js';
+import PixelImage from '../components/ui/PixelImage.jsx';
 import vltCoinImg from '../assets/coins/vlt-coin.png';
 
 const CATEGORIES = [
@@ -136,15 +137,16 @@ function InventoryCard({ item }) {
       }
     >
       <div
-        className="w-full h-[120px] rounded-lg flex items-center justify-center"
+        className="w-full h-[136px] rounded-lg flex items-center justify-center overflow-hidden"
         style={{ backgroundColor: withAlpha(meta.colour, 0.08) }}
       >
         {meta.img ? (
-          <img
+          <PixelImage
             src={meta.img}
             alt={meta.label}
-            className="max-h-full object-contain"
-            style={{ imageRendering: 'pixelated' }}
+            sourceSize={meta.spriteWidth}
+            sourceHeight={meta.spriteHeight}
+            size={meta.spriteWidth * meta.cardScale}
           />
         ) : (
           <span className="font-display text-3xl opacity-40" style={{ color: meta.colour }}>
@@ -178,13 +180,7 @@ function InventoryCard({ item }) {
           </div>
 
           <div className="flex items-center justify-center gap-1.5 py-2 rounded-lg border border-accent-watt/30 bg-accent-watt/5 text-accent-watt text-sm font-mono">
-            <img
-              src={vltCoinImg}
-              alt=""
-              width="16"
-              height="16"
-              style={{ imageRendering: 'pixelated' }}
-            />
+            <PixelImage src={vltCoinImg} sourceSize={32} size={16} />
             <span>{vlt(owned * (item.price || 0))} VLT</span>
           </div>
         </>

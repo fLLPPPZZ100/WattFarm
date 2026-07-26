@@ -16,6 +16,7 @@ import trxCoinImg from '../../assets/coins/trx-coin.png';
 import ethCoinImg from '../../assets/coins/eth-coin.png';
 import solCoinImg from '../../assets/coins/sol-coin.png';
 import avatarImg from '../../assets/avatars/avatar-1.png';
+import PixelImage from '../ui/PixelImage.jsx';
 
 
 const NAV_LINKS = [
@@ -186,7 +187,7 @@ export default function AppShell() {
                   onClick={function () { setDropdownOpen(!dropdownOpen); }}
                   className={'flex items-center gap-3 bg-bg-abyss px-4 py-2.5 border border-line-dusk hover:border-accent-watt/40 cursor-pointer ' + (dropdownOpen ? 'rounded-t-xl border-b border-b-transparent' : 'rounded-xl')}
                 >
-                  <img src={active.img} alt={active.label} width="32" height="32" style={{ imageRendering: 'pixelated', filter: 'drop-shadow(0 0 6px rgba(242,184,75,0.5))' }} />
+                  <PixelImage src={active.img} alt={active.label} sourceSize={32} size={32} glow />
                   <span className="font-mono text-base font-medium text-accent-watt">{active.format(balances[activeCurrency])} {active.label}</span>
                   <span className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white/5 cursor-pointer transition-colors text-text-muted text-xs">▼</span>
                 </button>
@@ -203,7 +204,7 @@ export default function AppShell() {
                             onClick={function () { setActiveCurrency(c.id); setDropdownOpen(false); }}
                             className={'w-full flex items-center gap-3 px-4 py-3 text-sm ' + (isActive ? 'bg-accent-watt/10' : 'hover:bg-bg-abyss/50')}
                           >
-                            <img src={c.img} alt={c.label} width="32" height="32" style={{ imageRendering: 'pixelated', filter: 'drop-shadow(0 0 6px rgba(242,184,75,0.5))' }} />
+                            <PixelImage src={c.img} alt={c.label} sourceSize={32} size={32} glow />
                             <div className="text-left flex-1">
                               <p className={isActive ? 'text-accent-watt font-semibold text-xs' : 'text-text-primary text-xs'}>{c.label}</p>
                               <p className="font-mono text-xs text-text-muted">{c.format(balances[c.id])} {c.label}</p>
@@ -224,16 +225,21 @@ export default function AppShell() {
             {/* RIGHT: Profile avatar or Login button */}
             {user ? (
               <div className="flex items-center gap-3 shrink-0" title="Profile">
+                {/*
+                  The 32px avatar used to be stretched to fill a 54px box, a
+                  1.6875x scale that mangled the pixel grid. It is now drawn at
+                  exactly 2x inside a 64px frame.
+                */}
                 <div
                   onClick={function () { navigate('/profile'); }}
                   onKeyDown={function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/profile'); } }}
                   role="button"
                   tabIndex={0}
                   aria-label="Abrir perfil"
-                  className="shrink-0 cursor-pointer hover:opacity-80 transition-opacity rounded-xl overflow-hidden border border-line-dusk bg-bg-abyss box-border"
-                  style={{ width: '54px', height: '54px' }}
+                  className="shrink-0 cursor-pointer hover:opacity-80 transition-opacity rounded-xl overflow-hidden border border-line-dusk bg-bg-abyss box-border flex items-center justify-center"
+                  style={{ width: '64px', height: '64px' }}
                 >
-                  <img src={avatarImg} alt="" className="w-full h-full object-cover block" style={{ imageRendering: 'pixelated' }} />
+                  <PixelImage src={avatarImg} sourceSize={32} size={64} className="block" />
                 </div>
                 <span
                   onClick={function () { navigate('/profile'); }}

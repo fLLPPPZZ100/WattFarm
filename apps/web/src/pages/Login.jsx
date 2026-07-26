@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { friendlyAuthError, scorePassword } from '../lib/authErrors.js';
 import PixelSky from '../components/auth/PixelSky.jsx';
 import { SessionLoading } from '../components/auth/SessionGate.jsx';
+import PixelImage from '../components/ui/PixelImage.jsx';
 import {
   PixelPanel,
   PixelHeading,
@@ -240,16 +241,13 @@ export default function Login() {
       <main className="relative w-full max-w-[440px] animate-pixel-in">
         {/* ── Wordmark ── */}
         <div className="mb-6 flex items-end justify-center gap-3">
-          <img
+          {/* 44px was a 0.6875x scale of the 64px sprite; 64px is 1:1. */}
+          <PixelImage
             src={panelImg}
-            alt=""
-            width="44"
-            height="44"
+            sourceSize={64}
+            size={64}
             className="animate-float"
-            style={{
-              imageRendering: 'pixelated',
-              filter: 'drop-shadow(0 0 10px rgba(242,184,75,0.5))',
-            }}
+            style={{ filter: 'drop-shadow(0 0 10px rgba(242,184,75,0.5))' }}
           />
           <div>
             <h1
@@ -486,16 +484,7 @@ export default function Login() {
 
                 {/* Reward teaser — reinforces the idle-game premise */}
                 <div className="pixel-panel-inset mt-5 flex items-center gap-2.5 px-3 py-2.5">
-                  <img
-                    src={vltCoinImg}
-                    alt=""
-                    width="18"
-                    height="18"
-                    style={{
-                      imageRendering: 'pixelated',
-                      filter: 'drop-shadow(0 0 5px rgba(242,184,75,0.55))',
-                    }}
-                  />
+                  <PixelImage src={vltCoinImg} sourceSize={32} size={16} />
                   <p className="text-[11px] leading-snug text-text-muted">
                     Ganhe <span className="font-mono text-accent-watt">VLT</span> a cada ciclo de
                     pagamento, mesmo offline.

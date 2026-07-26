@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAssetsStore } from '../store/assetsStore';
 import { metaFor, categoryOf } from '../data/items.js';
+import PixelImage from '../components/ui/PixelImage.jsx';
 import vltCoinImg from '../assets/coins/vlt-coin.png';
 
 /** Server cap on a single purchase, mirrored so the input cannot exceed it. */
@@ -125,15 +126,21 @@ function ShopCard({ item, vltBalance, onBuy, busy }) {
     >
       {/* Sprite */}
       <div
-        className="w-full h-[120px] rounded-lg flex items-center justify-center"
+        className="w-full h-[136px] rounded-lg flex items-center justify-center overflow-hidden"
         style={{ backgroundColor: withAlpha(meta.colour, 0.08) }}
       >
         {meta.img ? (
-          <img
+          /*
+            Drawn at an exact integer multiple. `object-contain` inside a fixed
+            box scaled by whatever fraction happened to fit — a 64px sprite in a
+            120px box is 1.875x, which smears the pixel grid.
+          */
+          <PixelImage
             src={meta.img}
             alt={meta.label}
-            className="max-h-full object-contain"
-            style={{ imageRendering: 'pixelated' }}
+            sourceSize={meta.spriteWidth}
+            sourceHeight={meta.spriteHeight}
+            size={meta.spriteWidth * meta.cardScale}
           />
         ) : (
           <span className="font-display text-3xl opacity-40" style={{ color: meta.colour }}>
@@ -191,13 +198,9 @@ function ShopCard({ item, vltBalance, onBuy, busy }) {
             : 'border-red-700/40 bg-red-900/10 text-red-400')
         }
       >
-        <img
-          src={vltCoinImg}
-          alt=""
-          width="18"
-          height="18"
-          style={{ imageRendering: 'pixelated' }}
-        />
+        {/* 16px is a clean half of the 32px source; 18px was a 0.5625x scale
+            that dropped pixel columns unevenly. */}
+        <PixelImage src={vltCoinImg} sourceSize={32} size={16} />
         <span>{vlt(totalPrice)} VLT</span>
       </div>
 

@@ -17,12 +17,24 @@ import mount2Img from '../assets/items/mounts/mount-2.png';
 
 /** @typedef {'generator'|'support'} ItemCategory */
 
+/**
+ * `spriteWidth`/`spriteHeight` are the asset's natural pixel dimensions.
+ *
+ * They are recorded here so the UI can draw at an exact integer multiple. Left
+ * to `object-contain` inside a fixed box, a 64px sprite was scaled by whatever
+ * fraction happened to fit (1.875x in a 120px box), which smears the pixel grid.
+ */
 export const ITEM_META = {
   solar: {
     label: 'Solar Panel',
     category: 'generator',
     blurb: 'Generates watts while installed on a mount.',
     img: solarPanelImg,
+    spriteWidth: 64,
+    spriteHeight: 64,
+    // 64 x 2 = 128, the same drawn width as the double mount at 1x, so cards
+    // read consistently without any sprite being scaled fractionally.
+    cardScale: 2,
     colour: '#F2B84B',
   },
   'panel-mount': {
@@ -30,6 +42,9 @@ export const ITEM_META = {
     category: 'support',
     blurb: 'Holds one solar panel. Takes one grid cell.',
     img: mount1Img,
+    spriteWidth: 64,
+    spriteHeight: 64,
+    cardScale: 2,
     colour: '#8B7355',
   },
   'panel-mount-double': {
@@ -37,6 +52,10 @@ export const ITEM_META = {
     category: 'support',
     blurb: 'Holds two solar panels and boosts their output.',
     img: mount2Img,
+    spriteWidth: 128,
+    spriteHeight: 64,
+    // Already 128 wide; 2x would be 256 and overflow the card.
+    cardScale: 1,
     colour: '#8B7355',
   },
 };
@@ -46,6 +65,9 @@ const FALLBACK = {
   category: 'generator',
   blurb: '',
   img: null,
+  spriteWidth: 64,
+  spriteHeight: 64,
+  cardScale: 1,
   colour: '#2A3B4D',
 };
 
