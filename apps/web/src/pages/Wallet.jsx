@@ -72,7 +72,8 @@ export default function Wallet() {
 
         {payouts.length === 0 ? (
           <p className="text-text-muted text-sm">
-            No mining payouts yet. Configure your mining allocations and wait for the next payout cycle.
+            No mining payouts yet. Install panels on mounts in your farm, then wait for the next
+            payout cycle.
           </p>
         ) : (
           <div className="space-y-2">
@@ -82,8 +83,10 @@ export default function Wallet() {
                 className="flex items-center justify-between py-2 border-b border-line-dusk last:border-0"
               >
                 <div>
-                  <p className="text-text-muted text-xs capitalize">
-                    {p.details.network} · {p.details.percentage}% allocation
+                  <p className="text-text-muted text-xs">
+                    {p.details.powerRate != null
+                      ? `${p.details.powerRate} W/s · ${p.details.sharePercent ?? 0}% of network`
+                      : 'mining payout'}
                   </p>
                   <p className="text-text-muted text-xs mt-0.5">
                     {new Date(p.timestamp).toLocaleString()}

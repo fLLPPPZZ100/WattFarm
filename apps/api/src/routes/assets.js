@@ -10,8 +10,9 @@ import {
   affordableUnits,
   canAfford,
 } from '../lib/money.js';
-import { computePowerRate } from '../services/powerCalculator.js';
-import env from '../config/env.js';
+import { computePowerRate, shareOf } from '../services/powerCalculator.js';
+import { getNetworkPower, BUDGET_PER_CYCLE } from '../services/networkPower.js';
+import { MOUNT_TYPES, PANEL_ASSET_TYPE } from '../config/mounts.js';
 
 const router = Router();
 
@@ -184,27 +185,47 @@ router.post(
  */
 router.get('/mine', verifyAuth, async (req, res) => {
   try {
-    const [playerAssets, user, placedMounts] = await Promise.all([
+    const [playerAssets, user, placedMounts, network] = await Promise.all([
       prisma.playerAsset.findMany({ where: { userId: req.uid } }),
       prisma.user.findUnique({
         where: { id: req.uid },
         select: { vltBalance: true },
       }),
       prisma.placedMount.findMany({ where: { userId: req.uid } }),
+      getNetworkPower(),
     ]);
 
     const powerRate = computePowerRate(placedMounts);
+
+    /**
+     * How many of each asset are installed, so the client can show what is
+     * actually free without recomputing it from a partial view. Storage used to
+     * subtract a combined mount count from the single-mount total, which made
+     * doubles eat into the singles' availability.
+     */
+    const placedByAsset = {};
+    let placedPanels = 0;
+    for (const mount of placedMounts) {
+      const def = MOUNT_TYPES[mount.type];
+      if (!def) continue;
+      placedByAsset[def.assetType] = (placedByAsset[def.assetType] || 0) + 1;
+      placedPanels += (mount.panels || []).filter(Boolean).length;
+    }
+    placedByAsset[PANEL_ASSET_TYPE] = placedPanels;
 
     res.json({
       assets: playerAssets.map((asset) => ({
         type: asset.type,
         quantity: asset.quantity,
+        placed: placedByAsset[asset.type] || 0,
+        available: Math.max(0, asset.quantity - (placedByAsset[asset.type] || 0)),
       })),
-      // Kept as `totalW` for compatibility with existing callers; the value is
-      // a rate in W/s.
+      // Kept as `totalW` for compatibility; the value is a rate in W/s.
       totalW: powerRate,
       powerRate,
-      networkBaseline: env.NETWORK_POWER_BASELINE,
+      networkTotal: network.total,
+      networkBaseline: network.baseline,
+      estimatedReward: shareOf(powerRate, network.total, BUDGET_PER_CYCLE),
       vltBalance: user ? moneyToNumber(user.vltBalance) : 0,
     });
   } catch (err) {

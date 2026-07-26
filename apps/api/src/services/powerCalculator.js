@@ -1,22 +1,17 @@
 /**
- * Power output from a farm layout.
+ * Power output and reward distribution.
  *
- * ## Why this replaces accumulated watts
+ * ## Why this replaced accumulated watts
  *
- * The old model multiplied the *owned* panel quantity by the time since
- * `lastCollected`, producing an ever-growing "accumulated W" that was then
- * split proportionally. Two problems:
- *
- *   1. Placement was irrelevant — owning panels paid the same as installing
- *      them, so the farm was decoration.
- *   2. `lastCollected` was only written on purchase, so the accumulated value
- *      grew without bound and whoever had bought longest ago dominated the
- *      split. Buying a new asset *reduced* a player's share by resetting it.
+ * The original model multiplied the *owned* panel quantity by the time since
+ * `lastCollected`, producing an ever-growing "accumulated W". Two problems:
+ * placement was irrelevant (owning paid the same as installing, so the farm was
+ * decoration), and `lastCollected` was only written on purchase, so the value
+ * grew without bound and buying an asset *reduced* a player's share.
  *
  * The genre model is a power *rate* competing for a block reward, not a
- * stockpile: RollerCoin pays out on hashrate share. Rate is also far simpler —
- * no timestamps, nothing to reset, and a layout change takes effect at the next
- * payout without any integration over time.
+ * stockpile — RollerCoin pays on hashrate share. A rate needs no timestamps, so
+ * nothing has to be reset and a layout change simply applies next cycle.
  */
 
 import { MOUNT_TYPES, PANEL_BASE_W } from '../config/mounts.js';
@@ -36,8 +31,8 @@ export function computePowerRate(placedMounts) {
     const def = MOUNT_TYPES[mount.type];
     if (!def) continue;
 
-    // Ignore any stored flags beyond the mount's real bay count, so a stale row
-    // cannot inflate output if a type's bay count ever shrinks.
+    // Ignore flags beyond the mount's real bay count, so a stale row cannot
+    // inflate output if a type's bay count ever shrinks.
     const panels = Array.isArray(mount.panels) ? mount.panels.slice(0, def.bays) : [];
     const filled = panels.filter(Boolean).length;
 
@@ -48,40 +43,52 @@ export function computePowerRate(placedMounts) {
 }
 
 /**
- * A player's share of a fixed block reward.
+ * Splits a fixed block reward between everyone mining it.
  *
- * With a single player and a plain proportional split, `myRate / totalRate` is
- * always 1, so the whole budget was paid out no matter how much was built —
- * exactly what made buying panels feel pointless. Adding a synthetic baseline
- * for "the rest of the network" makes the share meaningful from the first
- * panel, with naturally diminishing returns as it grows:
+ * Every player is measured against the *same* denominator: the synthetic
+ * baseline plus the combined rate of all real players. That is what keeps the
+ * budget conserved.
  *
- *   share = rate / (rate + baseline) x budget
+ * An earlier version computed each player independently as
+ * `rate / (rate + baseline)`, which quietly minted currency as the player base
+ * grew — ten players at 40 W/s each were paid 25 VLT apiece, so a 50 VLT budget
+ * paid out 250. With one player the two formulas agree exactly, so the bug was
+ * invisible in testing.
  *
- * The baseline plays the part of network difficulty. Raising it over time, or
- * deriving it from the real player base, is the lever for long-term balance.
+ * The baseline plays the part of network difficulty: it guarantees a single
+ * player cannot take the whole budget, and gives diminishing returns as their
+ * share of the network grows.
  *
- * @param {number} rate the player's W/s
+ * @param {{ userId: string, rate: number }[]} miners
  * @param {number} baseline synthetic network power, W/s
  * @param {number} budget reward available this cycle
- * @returns {number}
+ * @returns {{ userId: string, rate: number, share: number }[]}
  */
-export function computeShare(rate, baseline, budget) {
-  if (rate <= 0) return 0;
+export function computeNetworkShares(miners, baseline, budget) {
+  const playerRate = miners.reduce((sum, miner) => sum + Math.max(0, miner.rate), 0);
+  const total = Math.max(0, baseline) + playerRate;
 
-  const denominator = rate + Math.max(0, baseline);
-  if (denominator <= 0) return 0;
+  if (total <= 0) return miners.map((miner) => ({ ...miner, share: 0 }));
 
-  return (rate / denominator) * budget;
+  return miners.map((miner) => ({
+    ...miner,
+    share: (Math.max(0, miner.rate) / total) * budget,
+  }));
 }
 
 /**
- * Total power credited to a network, used to show a player where they stand.
+ * One player's share, given the network total.
+ *
+ * Used for display, where the caller already knows the network total from
+ * `networkPower.js` and does not need the whole miner list.
+ *
  * @param {number} rate
- * @param {number} baseline
+ * @param {number} networkTotal baseline + every player's rate
+ * @param {number} budget
  */
-export function networkTotal(rate, baseline) {
-  return Math.max(0, baseline) + Math.max(0, rate);
+export function shareOf(rate, networkTotal, budget) {
+  if (rate <= 0 || networkTotal <= 0) return 0;
+  return (rate / networkTotal) * budget;
 }
 
 export default computePowerRate;

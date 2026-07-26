@@ -157,6 +157,8 @@ export default class FarmScene extends Phaser.Scene {
 
     /* Server-owned figures, mirrored for display. */
     this.serverPowerRate = 0;
+    /** Baseline plus every player's output — the payout share denominator. */
+    this.networkTotal = 0;
     this.networkBaseline = 0;
 
     /* Save coalescing — see queueSave(). */
@@ -278,6 +280,18 @@ export default class FarmScene extends Phaser.Scene {
     return PANEL_BASE_W * (1 + MOUNT_TYPES[type].powerBonus);
   }
 
+  /**
+   * Network total to display against a locally computed output.
+   *
+   * The stored total comes from the server and lags an unsaved edit by a few
+   * hundred milliseconds, during which the player's own output is already
+   * higher. Taking the larger of the two keeps the share from briefly exceeding
+   * 100% right after installing a panel.
+   */
+  effectiveNetworkTotal(output) {
+    return Math.max(this.networkTotal, this.networkBaseline + output);
+  }
+
   /** Total effective W of everything currently placed. */
   totalPlacedOutput() {
     return this.mounts.reduce((total, mount) => {
@@ -336,14 +350,11 @@ export default class FarmScene extends Phaser.Scene {
   refreshToolbar() {
     if (this.outputLabel) {
       const output = this.totalPlacedOutput();
-
-      // Share of the simulated network, which is what actually decides the
-      // payout — output alone tells the player nothing about their income.
-      const total = output + this.networkBaseline;
+      const total = this.effectiveNetworkTotal(output);
       const share = total > 0 ? (output / total) * 100 : 0;
 
       this.outputLabel.setText(
-        this.networkBaseline > 0
+        total > 0
           ? `${output.toFixed(1)} W/s  ·  ${share.toFixed(1)}% of network`
           : `${output.toFixed(1)} W/s`
       );
@@ -991,7 +1002,10 @@ export default class FarmScene extends Phaser.Scene {
 
     if (result.ok) {
       this.serverPowerRate = result.powerRate;
+      this.networkTotal = result.networkTotal;
       this.networkBaseline = result.networkBaseline;
+      // Push the authoritative figures to React now that they are known.
+      this.emitPlacement();
       this.refreshToolbar();
     } else {
       /**
@@ -1039,6 +1053,7 @@ export default class FarmScene extends Phaser.Scene {
     this.clearFarm();
 
     this.serverPowerRate = data.powerRate;
+    this.networkTotal = data.networkTotal;
     this.networkBaseline = data.networkBaseline;
 
     let skipped = 0;
@@ -1087,6 +1102,7 @@ export default class FarmScene extends Phaser.Scene {
       // Locally computed so the React panels update on the same frame as the
       // edit; the server's figure replaces it once the save returns.
       this.totalPlacedOutput(),
+      this.effectiveNetworkTotal(this.totalPlacedOutput()),
       this.networkBaseline
     );
   }

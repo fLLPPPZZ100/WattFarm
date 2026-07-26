@@ -26,7 +26,6 @@ function fmt(n) { return (n || 0).toFixed(1); }
 export default function Storage() {
   var { user } = useAuth();
   var { assets, fetchMining } = useAssetsStore();
-  var { placedSolar, placedMount } = usePlacementStore();
   var pollingRef = useRef(null);
   var [activeCategory, setActiveCategory] = useState('generators');
 
@@ -39,15 +38,17 @@ export default function Storage() {
 
   // No unauthenticated branch: RequireAuth gates this route.
 
-  // Build owned map from API data (type -> quantity)
+  /**
+   * Availability comes from the server, which knows exactly what is installed.
+   *
+   * This used to subtract a combined mount count from the single-mount total, so
+   * placing a double reduced the number of singles the page claimed you had.
+   */
   var ownedMap = {};
   for (var i = 0; i < assets.length; i++) {
-    ownedMap[assets[i].type] = assets[i].quantity;
+    var asset = assets[i];
+    ownedMap[asset.type] = asset.available != null ? asset.available : asset.quantity;
   }
-  // Subtract placed items — placedMount is a combined total (single + double)
-  ownedMap['solar'] = Math.max(0, (ownedMap['solar'] || 0) - (placedSolar || 0));
-  ownedMap['panel-mount'] = Math.max(0, (ownedMap['panel-mount'] || 0) - (placedMount || 0));
-  ownedMap['panel-mount-double'] = Math.max(0, (ownedMap['panel-mount-double'] || 0) - 0);
 
   var totalItems = 0;
   for (var key in ownedMap) {

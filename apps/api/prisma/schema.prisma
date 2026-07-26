@@ -21,7 +21,6 @@ model User {
   createdAt       DateTime           @default(now())
   assets          PlayerAsset[]
   minigameLogs    MinigameSession[]
-  miningAllocations MiningAllocation[]
   payouts         PlayerPayout[]
   ledger          LedgerEntry[]
   placedMounts    PlacedMount[]
@@ -84,15 +83,9 @@ model MinigameSession {
   @@index([userId, game, timestamp])
 }
 
-model MiningAllocation {
-  id         String   @id @default(uuid())
-  userId     String
-  network    String   // "solar" | "wind" | "hydro"
-  percentage Float    // 0–100, user-defined split
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  user       User     @relation(fields: [userId], references: [id])
-}
+// MiningAllocation was removed with the wind and hydro networks. With a single
+// energy source there was nothing to allocate, and the payout depended on a row
+// that nothing ever created — so a player with a working farm earned nothing.
 
 model PlayerPayout {
   id         String   @id @default(uuid())

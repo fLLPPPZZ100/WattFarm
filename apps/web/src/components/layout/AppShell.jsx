@@ -39,7 +39,7 @@ const CYCLE_SECONDS = 600; // 10 minutes
 export default function AppShell() {
   const { user, logout } = useAuth();
   const { vltBalance, assets, fetchMining } = useAssetsStore();
-  const { placedSolar, placedMount, powerRate, networkBaseline } = usePlacementStore();
+  const { placedSolar, placedMount, powerRate, networkTotal } = usePlacementStore();
   const [activeCurrency, setActiveCurrency] = useState('VLT');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [countdown, setCountdown] = useState(CYCLE_SECONDS);
@@ -63,12 +63,13 @@ export default function AppShell() {
     if (!user) return undefined;
 
     bootGame(user.uid);
-    setPlacementCallback(function (solarPlaced, mountPlaced, powerRate, networkBaseline) {
+    setPlacementCallback(function (solarPlaced, mountPlaced, rate, total, baseline) {
       usePlacementStore.getState().setPlacement({
         placedSolar: solarPlaced,
         placedMount: mountPlaced,
-        powerRate: powerRate,
-        networkBaseline: networkBaseline,
+        powerRate: rate,
+        networkTotal: total,
+        networkBaseline: baseline,
       });
     });
 
@@ -111,14 +112,15 @@ export default function AppShell() {
    * Power panel values.
    *
    * `powerRate` comes from the game and already includes mount bonuses, so it is
-   * no longer `panels x 1`. The estimated reward is the player's share of the
-   * fixed budget against the synthetic network baseline — the same formula the
-   * server uses at payout — because output on its own says nothing about income.
+   * no longer `panels x 1`. `networkTotal` comes from the server and is the
+   * denominator the payout share is taken against — the baseline plus every
+   * player's output, not just this player's. The estimated reward uses the same
+   * formula as the payout, because output on its own says nothing about income.
    */
   var activeSolar = placedSolar || 0;
   var totalPower = powerRate || 0;
-  var networkTotal = totalPower + (networkBaseline || 0);
-  var networkShare = networkTotal > 0 ? totalPower / networkTotal : 0;
+  var network = networkTotal || 0;
+  var networkShare = network > 0 ? totalPower / network : 0;
   var BUDGET_PER_CYCLE = 50;
   var blockReward = networkShare * BUDGET_PER_CYCLE;
 
@@ -265,7 +267,7 @@ export default function AppShell() {
                   </div>
                   <div>
                     <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Network Power</p>
-                    <p className="font-mono text-sm text-text-primary">{networkTotal.toFixed(1)} W/s</p>
+                    <p className="font-mono text-sm text-text-primary">{network.toFixed(1)} W/s</p>
                     {/* Share bar — the payout is proportional to this. */}
                     <div className="mt-1 h-1.5 w-full bg-bg-abyss border border-line-dusk">
                       <div

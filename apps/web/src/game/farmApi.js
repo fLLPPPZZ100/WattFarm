@@ -24,7 +24,8 @@ import { api, ApiError } from '../lib/apiClient.js';
 /**
  * Loads the stored layout along with the rules and the network baseline.
  *
- * @returns {Promise<{ mounts: LayoutMount[], powerRate: number, networkBaseline: number, config: object } | null>}
+ * @returns {Promise<{ mounts: LayoutMount[], powerRate: number, networkTotal: number,
+ *   networkBaseline: number, config: object } | null>}
  *   null when the request failed, so the caller can start with an empty farm
  *   rather than a broken scene.
  */
@@ -34,6 +35,9 @@ export async function loadLayout() {
     return {
       mounts: Array.isArray(data.mounts) ? data.mounts : [],
       powerRate: data.powerRate ?? 0,
+      // The share denominator — baseline plus every player's output. Not the
+      // same as baseline + your own rate once other players exist.
+      networkTotal: data.networkTotal ?? 0,
       networkBaseline: data.networkBaseline ?? 0,
       config: data.config ?? null,
     };
@@ -53,7 +57,7 @@ export async function loadLayout() {
  * anything.
  *
  * @param {LayoutMount[]} mounts
- * @returns {Promise<{ ok: true, powerRate: number, networkBaseline: number }
+ * @returns {Promise<{ ok: true, powerRate: number, networkTotal: number, networkBaseline: number }
  *   | { ok: false, error: string, problems?: string[] }>}
  */
 export async function saveLayout(mounts) {
@@ -62,6 +66,7 @@ export async function saveLayout(mounts) {
     return {
       ok: true,
       powerRate: data.powerRate ?? 0,
+      networkTotal: data.networkTotal ?? 0,
       networkBaseline: data.networkBaseline ?? 0,
     };
   } catch (err) {

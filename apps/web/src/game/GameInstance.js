@@ -15,10 +15,20 @@ export function setPlacementCallback(fn) {
  * @param {number} solarPlaced panels installed
  * @param {number} mountPlaced mounts installed
  * @param {number} [powerRate] W/s including mount bonuses
- * @param {number} [networkBaseline] synthetic competing power, from the server
+ * @param {number} [networkTotal] baseline plus every player's output — the
+ *   denominator the payout share is taken against
+ * @param {number} [networkBaseline] synthetic competing power alone
  */
-export function notifyPlacementChange(solarPlaced, mountPlaced, powerRate, networkBaseline) {
-  if (onPlacementChange) onPlacementChange(solarPlaced, mountPlaced, powerRate, networkBaseline);
+export function notifyPlacementChange(
+  solarPlaced,
+  mountPlaced,
+  powerRate,
+  networkTotal,
+  networkBaseline
+) {
+  if (onPlacementChange) {
+    onPlacementChange(solarPlaced, mountPlaced, powerRate, networkTotal, networkBaseline);
+  }
 }
 
 /**

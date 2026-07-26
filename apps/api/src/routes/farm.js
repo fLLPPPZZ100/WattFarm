@@ -11,7 +11,7 @@ import {
   publicConfig,
 } from '../config/mounts.js';
 import { computePowerRate } from '../services/powerCalculator.js';
-import env from '../config/env.js';
+import { getNetworkPower } from '../services/networkPower.js';
 
 const router = Router();
 
@@ -121,12 +121,16 @@ router.get('/layout', verifyAuth, async (req, res) => {
       orderBy: [{ row: 'asc' }, { col: 'asc' }],
     });
 
+    const [network] = await Promise.all([getNetworkPower()]);
     const powerRate = computePowerRate(mounts);
 
     return res.json({
       mounts: mounts.map(serialiseMount),
       powerRate,
-      networkBaseline: env.NETWORK_POWER_BASELINE,
+      // The share denominator, not just the baseline: income depends on the
+      // player's slice of the whole network.
+      networkTotal: network.total,
+      networkBaseline: network.baseline,
       config: publicConfig(),
     });
   } catch (err) {
@@ -177,13 +181,18 @@ router.put('/layout', verifyAuthStrict, configLimiter, async (req, res) => {
         orderBy: [{ row: 'asc' }, { col: 'asc' }],
       });
 
+      // Read the network inside the transaction so the returned total already
+      // reflects the layout just written.
+      const network = await getNetworkPower(tx);
+
       return {
         status: 200,
         body: {
           success: true,
           mounts: stored.map(serialiseMount),
           powerRate: computePowerRate(stored),
-          networkBaseline: env.NETWORK_POWER_BASELINE,
+          networkTotal: network.total,
+          networkBaseline: network.baseline,
         },
       };
     });
