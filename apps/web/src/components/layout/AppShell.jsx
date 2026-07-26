@@ -10,6 +10,7 @@ import {
   setPlacementCallback,
 } from '../../game/GameInstance.js';
 import { usePlacementStore, resetPlacementStore } from '../../store/placementStore.js';
+import { CANVAS, STATION, CYCLE_SECONDS } from '../../game/layout.js';
 import vltCoinImg from '../../assets/coins/vlt-coin.png';
 import btcCoinImg from '../../assets/coins/btc-coin.png';
 import trxCoinImg from '../../assets/coins/trx-coin.png';
@@ -34,8 +35,6 @@ const CURRENCIES = [
   { id: 'SOL', label: 'SOL', img: solCoinImg, format: function (v) { return v.toFixed(4); } },
   { id: 'TRX', label: 'TRX', img: trxCoinImg, format: function (v) { return v.toFixed(6); } },
 ];
-
-const CYCLE_SECONDS = 600; // 10 minutes
 
 export default function AppShell() {
   const { user, logout } = useAuth();
@@ -263,16 +262,43 @@ export default function AppShell() {
           {/* 3-column layout: power panel (left) + game viewport (center) + ad space (right) */}
           {isDashboard && user && (
             <>
-              {/* LEFT: Power Panel */}
-              <div className="absolute left-4 top-4 z-10 hidden lg:block">
-                <div className="flex flex-col gap-3 bg-bg-panel/80 backdrop-blur-sm border border-line-dusk rounded-xl p-4 w-[176px]">
+              {/*
+                Stats panel, overlaid on the canvas rather than beside it.
+
+                The trunk cable is drawn inside the canvas and has to terminate
+                exactly at this panel's right edge. Sharing one coordinate space
+                is what makes that possible — positioning the panel outside the
+                canvas would need canvas-to-page conversion that breaks on any
+                viewport change. The grid reserves the strip it sits on, so it
+                never covers a build cell.
+
+                Geometry comes from game/layout.js; a few pixels of disagreement
+                shows up as a severed wire.
+              */}
+              <div
+                className="absolute left-1/2 -translate-x-1/2 z-10 pointer-events-none hidden lg:block"
+                style={{ top: '12px', width: CANVAS.width, height: CANVAS.height }}
+              >
+                <div
+                  className="absolute flex flex-col gap-2.5 bg-bg-panel/90 backdrop-blur-sm border-2 border-line-dusk p-3"
+                  style={{
+                    left: STATION.left,
+                    top: STATION.top,
+                    width: STATION.width,
+                    height: STATION.height,
+                  }}
+                >
+                  {/* Accent rule, matching the site's panels. */}
+                  <div className="absolute inset-x-0 top-0 h-0.5 bg-accent-watt" />
+
                   <div>
-                    <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Your Power</p>
+                    <p className="text-[9px] text-text-muted uppercase tracking-wider">Your Power</p>
                     <p className="font-mono text-sm text-accent-current">{totalPower.toFixed(1)} W/s</p>
-                    <p className="text-[10px] text-text-muted mt-0.5">{activeSolar} panels placed</p>
+                    <p className="text-[9px] text-text-muted">{activeSolar} panels placed</p>
                   </div>
+
                   <div>
-                    <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Network Power</p>
+                    <p className="text-[9px] text-text-muted uppercase tracking-wider">Network Power</p>
                     <p className="font-mono text-sm text-text-primary">{network.toFixed(1)} W/s</p>
                     {/* Share bar — the payout is proportional to this. */}
                     <div className="mt-1 h-1.5 w-full bg-bg-abyss border border-line-dusk">
@@ -281,16 +307,18 @@ export default function AppShell() {
                         style={{ width: Math.min(100, networkShare * 100).toFixed(1) + '%' }}
                       />
                     </div>
-                    <p className="text-[10px] text-accent-current mt-0.5 font-mono">
+                    <p className="text-[9px] text-accent-current mt-0.5 font-mono">
                       {(networkShare * 100).toFixed(1)}% share
                     </p>
                   </div>
+
                   <div>
-                    <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Next Payout</p>
+                    <p className="text-[9px] text-text-muted uppercase tracking-wider">Next Payout</p>
                     <p className="font-mono text-sm text-accent-watt">{countdownStr}</p>
                   </div>
+
                   <div>
-                    <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Est. Reward</p>
+                    <p className="text-[9px] text-text-muted uppercase tracking-wider">Est. Reward</p>
                     <p className="font-mono text-sm text-accent-watt">{blockReward.toFixed(2)} VLT</p>
                   </div>
                 </div>

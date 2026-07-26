@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
+import { GRID, STATION, TRUNK_X, TOOLBAR_H } from '../layout.js';
 import { notifyPlacementChange, getCurrentUserId } from '../GameInstance.js';
 import { loadLayout, saveLayout } from '../farmApi.js';
 import {
@@ -34,13 +35,16 @@ import {
    put two of its four rows in the sky.
    ══════════════════════════════════════════════════════════════════════ */
 
-const TILE = 64;
-const GRID_COLS = 14;
-const GRID_ROWS = 4;
-const GRID_OFFSET_X = 32; // 32 + 14*64 = 928, leaving a 32px right margin
-const GRID_OFFSET_Y = 344; // 344 + 4*64 = 600, exactly the toolbar line
-
-const TOOLBAR_H = 40;
+/**
+ * Grid geometry comes from game/layout.js because the React stats panel needs
+ * the same numbers: it is positioned over the canvas, and the trunk cable has to
+ * terminate exactly at its edge.
+ */
+const TILE = GRID.tile;
+const GRID_COLS = GRID.cols;
+const GRID_ROWS = GRID.rows;
+const GRID_OFFSET_X = GRID.offsetX;
+const GRID_OFFSET_Y = GRID.offsetY;
 
 /**
  * Mount definitions. Slot offsets are measured from the sprites:
@@ -857,42 +861,79 @@ export default class FarmScene extends Phaser.Scene {
     return mount.y + CABLE.y;
   }
 
+  /** Straight run of cable blocks between two points on the same axis. */
+  drawStraightCable(x1, y1, x2, y2) {
+    const objects = [];
+    const points = [];
+
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const distance = Math.hypot(dx, dy);
+    const segments = Math.max(1, Math.round(distance / CABLE.step));
+
+    for (let i = 0; i <= segments; i += 1) {
+      const t = i / segments;
+      const px = Math.round(x1 + dx * t);
+      const py = Math.round(y1 + dy * t);
+
+      points.push({ x: px, y: py });
+
+      if (i < segments) {
+        // Vertical runs need the thickness on the other axis.
+        const w = Math.abs(dx) >= Math.abs(dy) ? CABLE.step + 1 : CABLE.thickness;
+        const h = Math.abs(dx) >= Math.abs(dy) ? CABLE.thickness : CABLE.step + 1;
+        objects.push(this.add.rectangle(px, py, w, h, CABLE.colour, 1));
+      }
+    }
+
+    return { objects, points };
+  }
+
   /**
    * Redraws every cable from scratch.
    *
    * Rebuilding is cheap — a few dozen rectangles — and it removes a whole class
    * of bug: there is no incremental state to get out of step with the mounts
    * after a placement, removal, or a layout restore.
+   *
+   * Topology: each row is strung left to right, then runs left to a vertical
+   * trunk, which feeds the stats panel. Previously a row's cable simply stopped
+   * at its last mount, so the wiring led nowhere — the panel is the farm's grid
+   * connection, and the wire now visibly reaches it.
    */
   rebuildCables() {
     this.cableLayer.removeAll(true);
     this.pulses = [];
 
-    // Wire each row independently: a run of cable across rows would have to
-    // cross the field, which is not how a panel row is actually strung.
+    /** Trunk tap points, one per row that is generating. */
+    const taps = [];
+
     for (let row = 0; row < GRID_ROWS; row += 1) {
       const powered = this.mounts
         .filter((m) => m.getData('gridRow') === row && this.isPowered(m))
         .sort((a, b) => a.getData('gridCol') - b.getData('gridCol'));
 
-      // A single generating mount has nothing to connect to.
-      if (powered.length < 2) continue;
+      if (powered.length === 0) continue;
 
-      /** Concatenated path across the whole row, for the pulse to travel. */
+      /**
+       * Path the energy pulse follows, built from the far end of the row towards
+       * the trunk so the pulse travels the way current does — into the station.
+       */
       const path = [];
 
-      for (let i = 0; i < powered.length - 1; i += 1) {
+      // Row chain, right to left.
+      for (let i = powered.length - 1; i > 0; i -= 1) {
         const from = powered[i];
-        const to = powered[i + 1];
+        const to = powered[i - 1];
 
-        const x1 = this.connectorX(from, 'right');
-        const x2 = this.connectorX(to, 'left');
+        const x1 = this.connectorX(from, 'left');
+        const x2 = this.connectorX(to, 'right');
 
         // Adjacent mounts can leave almost no gap, in which case a cable would
         // be a single stray block — skip it and let the frames read as touching.
-        if (x2 - x1 < CABLE.step) continue;
+        if (x1 - x2 < CABLE.step) continue;
 
-        const span = x2 - x1;
+        const span = x1 - x2;
         const sag = Math.min(CABLE.maxSag, span * CABLE.sagRatio);
 
         const { objects, points } = createSaggingCable(this, {
@@ -910,7 +951,69 @@ export default class FarmScene extends Phaser.Scene {
         path.push(...points);
       }
 
-      if (path.length > 1) this.createPulse(path);
+      // Feeder from the leftmost mount out to the trunk.
+      const leftmost = powered[0];
+      const feederY = this.connectorY(leftmost);
+      const feeder = this.drawStraightCable(
+        this.connectorX(leftmost, 'left'),
+        feederY,
+        TRUNK_X,
+        feederY
+      );
+      this.cableLayer.add(feeder.objects);
+      path.push(...feeder.points);
+
+      taps.push({ y: feederY, path });
+    }
+
+    if (taps.length === 0) return;
+
+    /*
+      Trunk: a single vertical run spanning every tap, plus the short stub into
+      the panel's edge. Drawn once rather than per row so overlapping rows do
+      not stack blocks on top of each other.
+    */
+    const top = Math.min(STATION.connectorY, ...taps.map((t) => t.y));
+    const bottom = Math.max(STATION.connectorY, ...taps.map((t) => t.y));
+
+    const trunk = this.drawStraightCable(TRUNK_X, top, TRUNK_X, bottom);
+    this.cableLayer.add(trunk.objects);
+
+    const stub = this.drawStraightCable(
+      TRUNK_X,
+      STATION.connectorY,
+      STATION.right,
+      STATION.connectorY
+    );
+    this.cableLayer.add(stub.objects);
+
+    // Terminal block where the wire meets the panel, so the join reads as a
+    // connection rather than a cable that happens to stop there.
+    this.cableLayer.add(
+      this.add.rectangle(STATION.right - 2, STATION.connectorY, 6, 8, CABLE.colour, 1)
+    );
+
+    /*
+      One pulse per row, continuing down the trunk and into the panel, so each
+      row's energy is visibly delivered.
+    */
+    for (const tap of taps) {
+      const trunkLeg = this.drawStraightCable(
+        TRUNK_X,
+        tap.y,
+        TRUNK_X,
+        STATION.connectorY
+      ).points;
+
+      const stubLeg = this.drawStraightCable(
+        TRUNK_X,
+        STATION.connectorY,
+        STATION.right,
+        STATION.connectorY
+      ).points;
+
+      const full = [...tap.path, ...trunkLeg, ...stubLeg];
+      if (full.length > 1) this.createPulse(full);
     }
   }
 
