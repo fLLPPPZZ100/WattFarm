@@ -11,6 +11,19 @@ const router = Router();
  * Shapes the user row for the client. Keeps the response explicit so adding a
  * column to the schema never accidentally exposes it through this endpoint.
  */
+/**
+ * Balance granted to a brand-new account.
+ *
+ * The payout is now a share of the network — `rate / (rate + baseline)` — which
+ * is zero when nothing is placed. Without seed capital a new player would earn
+ * nothing forever and could never buy their first panel, since the only other
+ * income is the minigame loot table, which pays nothing 98.65% of the time.
+ *
+ * 50 VLT buys two mount-and-panel pairs (25 each), so the farm starts producing
+ * immediately and the player has a real first decision to make.
+ */
+const STARTING_VLT = 50;
+
 function serialiseUser(user) {
   return {
     id: user.id,
@@ -47,6 +60,8 @@ router.post('/sync', verifyAuth, authSyncLimiter, async (req, res) => {
         // permits many NULLs but only one ''. The old default collided as soon
         // as a second account without an email was created.
         email: email ?? null,
+        // Only applied on create, so this is not a repeatable payout.
+        vltBalance: STARTING_VLT,
       },
     });
 

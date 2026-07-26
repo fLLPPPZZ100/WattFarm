@@ -135,6 +135,38 @@ if (isProduction && !REQUIRE_VERIFIED_EMAIL) {
   );
 }
 
+/* ── Economy ── */
+/**
+ * Synthetic network power, in W/s, standing in for "everyone else mining".
+ *
+ * The payout splits a fixed budget by power share. With a single real player a
+ * plain proportional split always awards the entire budget, so building more
+ * changed nothing — the observed symptom was 5,745 W and 17,784 W both paying
+ * exactly 50 VLT. This baseline makes the share meaningful from the first
+ * panel, with naturally diminishing returns:
+ *
+ *   share = rate / (rate + baseline) x budget
+ *
+ * It is the difficulty knob: higher means slower progression. Simulated, with
+ * the starting grant and a 50 VLT budget per cycle:
+ *
+ *   baseline   5 panels   20 panels   full grid   income at full grid
+ *         10       1.5h        4.0h        7.8h   85% of budget
+ *         40       4.2h       10.3h       16.8h   58% of budget
+ *         60       6.0h       14.7h       23.0h   48% of budget
+ *
+ * 40 is the default: a full grid takes a couple of evenings rather than an
+ * afternoon, and it still leaves 42% of the budget unclaimed so future tiers
+ * and grid expansions have somewhere to go.
+ */
+const rawBaseline = process.env.NETWORK_POWER_BASELINE ?? '40';
+const NETWORK_POWER_BASELINE = Number.parseFloat(rawBaseline);
+if (!Number.isFinite(NETWORK_POWER_BASELINE) || NETWORK_POWER_BASELINE < 0) {
+  problems.push(
+    `NETWORK_POWER_BASELINE must be a non-negative number (received "${rawBaseline}")`
+  );
+}
+
 /* ── Report and abort ── */
 if (problems.length > 0) {
   const message = [
@@ -166,6 +198,7 @@ export const env = Object.freeze({
   USE_APPLICATION_DEFAULT_CREDENTIALS,
   CHECK_REVOKED_TOKENS,
   REQUIRE_VERIFIED_EMAIL,
+  NETWORK_POWER_BASELINE,
 });
 
 export default env;

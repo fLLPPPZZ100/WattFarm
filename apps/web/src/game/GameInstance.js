@@ -9,8 +9,16 @@ export function setPlacementCallback(fn) {
   onPlacementChange = fn;
 }
 
-export function notifyPlacementChange(solarPlaced, mountPlaced) {
-  if (onPlacementChange) onPlacementChange(solarPlaced, mountPlaced);
+/**
+ * Reports the placed layout to React.
+ *
+ * @param {number} solarPlaced panels installed
+ * @param {number} mountPlaced mounts installed
+ * @param {number} [powerRate] W/s including mount bonuses
+ * @param {number} [networkBaseline] synthetic competing power, from the server
+ */
+export function notifyPlacementChange(solarPlaced, mountPlaced, powerRate, networkBaseline) {
+  if (onPlacementChange) onPlacementChange(solarPlaced, mountPlaced, powerRate, networkBaseline);
 }
 
 /**

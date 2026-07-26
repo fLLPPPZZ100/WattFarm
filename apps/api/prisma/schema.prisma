@@ -24,6 +24,7 @@ model User {
   miningAllocations MiningAllocation[]
   payouts         PlayerPayout[]
   ledger          LedgerEntry[]
+  placedMounts    PlacedMount[]
 }
 
 model AssetCatalog {
@@ -40,6 +41,32 @@ model PlayerAsset {
   quantity      Int      @default(0)
   lastCollected DateTime @default(now())
   user          User     @relation(fields: [userId], references: [id])
+}
+
+/// A mount placed on the farm grid.
+///
+/// The layout used to live only in the browser's localStorage, which meant two
+/// things: the server had no idea what was placed (it computed output from the
+/// quantity a player *owned*, so the grid was decorative), and the player could
+/// rewrite it from the console. Now that mount tiers grant a power bonus, the
+/// layout decides income and has to be server-authoritative.
+///
+/// `col`/`row` are the anchor cell — the leftmost cell for a multi-cell mount.
+/// `panels` has one entry per bay, in slot order.
+model PlacedMount {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String // "mount_single" | "mount_double"
+  col       Int
+  row       Int
+  panels    Boolean[]
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  // One mount per anchor cell. Overlap of a multi-cell mount is checked in
+  // application code, which knows how wide each type is.
+  @@unique([userId, col, row])
+  @@index([userId])
 }
 
 model MinigameSession {

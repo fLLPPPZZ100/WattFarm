@@ -2,14 +2,15 @@
 /**
  * Runs one mining payout cycle immediately, instead of waiting for the cron.
  *
- * Useful for verifying the payout path end to end — including that
- * `lastCollected` is consumed correctly and that `payout.amount` reaches the
- * client as a JSON number rather than a Decimal-serialised string.
+ * Useful for verifying the payout path end to end: that power comes from what
+ * is placed, that the synthetic network baseline produces a partial share
+ * instead of the whole budget, and that `payout.amount` reaches the client as a
+ * JSON number rather than a Decimal-serialised string.
  *
  * Usage (from apps/api, so the .env is picked up):
  *
  *   node scripts/run-payout.mjs
- *   node scripts/run-payout.mjs --explain    # also print why players were skipped
+ *   node scripts/run-payout.mjs --explain    # show why players were skipped
  *
  * Writes to the database: credits balances and inserts PlayerPayout rows.
  */
@@ -18,7 +19,8 @@ import 'dotenv/config';
 
 import prisma from '../src/lib/prisma.js';
 import { runPayoutCycle } from '../src/services/miningPayout.js';
-import { calculateAccumulatedW } from '../src/services/wCalculator.js';
+import { computePowerRate, computeShare } from '../src/services/powerCalculator.js';
+import env from '../src/config/env.js';
 
 const explain = process.argv.includes('--explain');
 
@@ -35,17 +37,16 @@ const c = {
 /**
  * Explains, per network, whether anyone is eligible.
  *
- * A payout produces nothing unless a player has BOTH a mining allocation for
- * the network AND a PlayerAsset of that type with quantity > 0 — a combination
- * that is easy to miss when testing, and which otherwise just looks like the
- * cycle silently did nothing.
+ * A payout produces nothing unless a player has BOTH an allocation for the
+ * network AND panels actually installed on mounts. Owning panels is no longer
+ * enough — that is the whole point of the placement change — and without this
+ * report a cycle that pays nothing just looks broken.
  */
 async function describeEligibility() {
-  const networks = ['solar', 'wind', 'hydro'];
-
   console.log(`\n${c.bold}${c.cyan}Eligibility${c.reset}`);
+  console.log(`  ${c.dim}network baseline: ${env.NETWORK_POWER_BASELINE} W/s${c.reset}`);
 
-  for (const network of networks) {
+  for (const network of ['solar', 'wind', 'hydro']) {
     const allocations = await prisma.miningAllocation.findMany({ where: { network } });
 
     if (allocations.length === 0) {
@@ -56,42 +57,45 @@ async function describeEligibility() {
       continue;
     }
 
-    const catalogEntry = await prisma.assetCatalog.findUnique({ where: { type: network } });
-    const baseW = catalogEntry?.baseW ?? 0;
+    if (network !== 'solar') {
+      console.log(
+        `  ${c.yellow}${network}${c.reset}: ${allocations.length} allocation(s), but no ` +
+          `placeable ${network} asset exists yet — pays nothing`
+      );
+      continue;
+    }
 
     let eligible = 0;
-    for (const alloc of allocations) {
-      const asset = await prisma.playerAsset.findFirst({
-        where: { userId: alloc.userId, type: network },
-      });
 
-      if (!asset || asset.quantity === 0) {
-        if (explain) {
-          console.log(
-            `  ${c.dim}${network}: user ${alloc.userId.slice(0, 8)}… allocated ` +
-              `${alloc.percentage}% but owns no ${network} asset${c.reset}`
-          );
-        }
-        continue;
-      }
+    for (const allocation of allocations) {
+      const placed = await prisma.placedMount.findMany({ where: { userId: allocation.userId } });
+      const rate = computePowerRate(placed);
 
-      const accumulated = calculateAccumulatedW(asset, baseW);
-      if (accumulated <= 0) {
+      if (rate <= 0) {
         if (explain) {
+          const owned = await prisma.playerAsset.findMany({ where: { userId: allocation.userId } });
+          const panels = owned.find((a) => a.type === 'solar')?.quantity ?? 0;
           console.log(
-            `  ${c.dim}${network}: user ${alloc.userId.slice(0, 8)}… has 0 accumulated W ` +
-              `(baseW=${baseW}, qty=${asset.quantity}) — wait a moment and retry${c.reset}`
+            `  ${c.dim}${network}: user ${allocation.userId.slice(0, 8)}… ` +
+              `${placed.length} mount(s) placed, 0 W/s` +
+              (panels > 0 ? ` — owns ${panels} panel(s) but none installed on a mount` : '') +
+              `${c.reset}`
           );
         }
         continue;
       }
 
       eligible += 1;
+
       if (explain) {
+        const effective = rate * (allocation.percentage / 100);
+        const share = computeShare(effective, env.NETWORK_POWER_BASELINE, 50);
+        const pct = (effective / (effective + env.NETWORK_POWER_BASELINE)) * 100;
         console.log(
-          `  ${c.dim}${network}: user ${alloc.userId.slice(0, 8)}… ` +
-            `qty=${asset.quantity} accumulatedW=${accumulated.toFixed(2)} ` +
-            `allocation=${alloc.percentage}%${c.reset}`
+          `  ${c.dim}${network}: user ${allocation.userId.slice(0, 8)}… ` +
+            `${rate} W/s placed, ${allocation.percentage}% allocated → ` +
+            `${effective.toFixed(2)} W/s = ${pct.toFixed(1)}% of the network → ` +
+            `${share.toFixed(2)} VLT${c.reset}`
         );
       }
     }
@@ -142,8 +146,8 @@ async function main() {
     }
 
     console.log(
-      `\n  ${c.green}Now check the wallet page, or re-run the concurrency probe ` +
-        `with --skip-buy --skip-game to confirm the amount serialises as a number.${c.reset}`
+      `\n  ${c.green}Run the cycle again without building anything: the payout should be ` +
+        `the same, because it now depends on power rate rather than elapsed time.${c.reset}`
     );
   }
 }
@@ -154,7 +158,7 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    // Disconnect explicitly, then let the loop drain on its own — calling
-    // process.exit() here would abort libuv mid-teardown on Windows.
+    // Disconnect, then let the loop drain — process.exit() here would abort
+    // libuv mid-teardown on Windows.
     await prisma.$disconnect();
   });

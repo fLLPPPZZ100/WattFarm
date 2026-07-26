@@ -10,7 +10,8 @@ import {
   affordableUnits,
   canAfford,
 } from '../lib/money.js';
-import { calculateAccumulatedW } from '../services/wCalculator.js';
+import { computePowerRate } from '../services/powerCalculator.js';
+import env from '../config/env.js';
 
 const router = Router();
 
@@ -173,38 +174,37 @@ router.post(
   }
 );
 
-// GET /api/assets/mine — player assets + accumulated W computed on the fly
+/**
+ * GET /api/assets/mine — inventory, balance and current power output.
+ *
+ * `totalW` is now the instantaneous rate produced by what is actually *placed*,
+ * not an accumulated total derived from what is owned. Owning panels no longer
+ * generates anything on its own — they have to be installed on a mount, which
+ * is what makes the farm grid meaningful.
+ */
 router.get('/mine', verifyAuth, async (req, res) => {
   try {
-    const [playerAssets, catalog, user] = await Promise.all([
+    const [playerAssets, user, placedMounts] = await Promise.all([
       prisma.playerAsset.findMany({ where: { userId: req.uid } }),
-      prisma.assetCatalog.findMany(),
       prisma.user.findUnique({
         where: { id: req.uid },
         select: { vltBalance: true },
       }),
+      prisma.placedMount.findMany({ where: { userId: req.uid } }),
     ]);
 
-    const baseWMap = {};
-    for (const entry of catalog) {
-      baseWMap[entry.type] = entry.baseW;
-    }
-
-    let totalW = 0;
-    const assetsWithW = playerAssets.map((asset) => {
-      const baseW = baseWMap[asset.type] || 0;
-      const accumulated = calculateAccumulatedW(asset, baseW);
-      totalW += accumulated;
-      return {
-        type: asset.type,
-        quantity: asset.quantity,
-        accumulatedW: accumulated,
-      };
-    });
+    const powerRate = computePowerRate(placedMounts);
 
     res.json({
-      assets: assetsWithW,
-      totalW,
+      assets: playerAssets.map((asset) => ({
+        type: asset.type,
+        quantity: asset.quantity,
+      })),
+      // Kept as `totalW` for compatibility with existing callers; the value is
+      // a rate in W/s.
+      totalW: powerRate,
+      powerRate,
+      networkBaseline: env.NETWORK_POWER_BASELINE,
       vltBalance: user ? moneyToNumber(user.vltBalance) : 0,
     });
   } catch (err) {

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import { notifyPlacementChange, getCurrentUserId } from '../GameInstance.js';
+import { loadLayout, saveLayout } from '../farmApi.js';
 import {
   C,
   CSS,
@@ -133,8 +134,7 @@ const DEPTH = {
   toast: 900,
 };
 
-/** Current save format. Older layouts are migrated, not discarded. */
-const SAVE_VERSION = 3;
+
 
 export default class FarmScene extends Phaser.Scene {
   constructor() {
@@ -154,6 +154,15 @@ export default class FarmScene extends Phaser.Scene {
 
     this.popup = null;
     this.toasts = null;
+
+    /* Server-owned figures, mirrored for display. */
+    this.serverPowerRate = 0;
+    this.networkBaseline = 0;
+
+    /* Save coalescing — see queueSave(). */
+    this.saveTimer = null;
+    this.saveInFlight = false;
+    this.savePending = false;
   }
 
   create() {
@@ -181,7 +190,10 @@ export default class FarmScene extends Phaser.Scene {
     });
 
     this.createToolbar();
-    this.restorePlacement();
+
+    // Fire and forget: the scene renders an empty farm immediately and fills in
+    // when the server answers, rather than blocking the first frame.
+    this.loadLayoutFromServer();
 
     this.game.events.emit('ready');
   }
@@ -324,7 +336,17 @@ export default class FarmScene extends Phaser.Scene {
   refreshToolbar() {
     if (this.outputLabel) {
       const output = this.totalPlacedOutput();
-      this.outputLabel.setText(`${output.toFixed(1)} W/s`);
+
+      // Share of the simulated network, which is what actually decides the
+      // payout — output alone tells the player nothing about their income.
+      const total = output + this.networkBaseline;
+      const share = total > 0 ? (output / total) * 100 : 0;
+
+      this.outputLabel.setText(
+        this.networkBaseline > 0
+          ? `${output.toFixed(1)} W/s  ·  ${share.toFixed(1)}% of network`
+          : `${output.toFixed(1)} W/s`
+      );
     }
 
     if (this.hintLabel) {
@@ -912,114 +934,124 @@ export default class FarmScene extends Phaser.Scene {
   /* ══ PERSISTENCE ══ */
 
   /**
-   * Storage key for the current player's layout, scoped by uid.
+   * Removes layouts left by the localStorage era.
    *
-   * Returns null when no user is known, which disables persistence rather than
-   * writing to a key shared by every account on the browser.
-   *
-   * This is a stopgap: the layout will move to the server, because the client
-   * cannot be trusted with something the payout depends on.
+   * The server is now the only source of truth, so these keys are dead. They
+   * are cleared rather than ignored because they contain another account's farm
+   * on a shared browser.
    */
-  placementStorageKey() {
-    const uid = getCurrentUserId();
-    return uid ? `wattfarm:placement:${uid}` : null;
-  }
-
-  savePlacement() {
-    const key = this.placementStorageKey();
-    if (!key) return;
-
-    const payload = {
-      v: SAVE_VERSION,
-      tile: TILE,
-      mounts: this.mounts.map((mount) => ({
-        type: mount.getData('mountType'),
-        col: mount.getData('gridCol'),
-        row: mount.getData('gridRow'),
-        panels: mount.getData('panels').map(Boolean),
-      })),
-    };
-
+  discardLocalLayouts() {
     try {
-      localStorage.setItem(key, JSON.stringify(payload));
-    } catch (e) {
-      console.warn('[game] could not save placement:', e?.name || e);
-    }
-  }
+      localStorage.removeItem('wattfarm_placement');
 
-  discardLegacyPlacement() {
-    try {
-      if (localStorage.getItem('wattfarm_placement') !== null) {
-        localStorage.removeItem('wattfarm_placement');
-      }
+      const uid = getCurrentUserId();
+      if (uid) localStorage.removeItem(`wattfarm:placement:${uid}`);
     } catch {
       // Storage unavailable — nothing to clean up.
     }
   }
 
-  /**
-   * Normalises any saved format to a list of `{ type, col, row, panels }`.
-   *
-   * v1 was a flat array with panels as separate entries at the same cell.
-   * v2 introduced mount-owned panels but used the old grid, whose rows ran
-   * 2..5 — two of which sat in the sky. Rows are shifted down by
-   * GRID_ROWS_START_OLD so an existing farm keeps its arrangement on the new
-   * grass-aligned grid instead of being thrown away.
-   */
-  normaliseSaved(raw) {
-    const OLD_FIRST_ROW = 2;
-
-    if (Array.isArray(raw)) {
-      const mounts = [];
-      const panelCells = new Set();
-
-      for (const item of raw) {
-        if (item?.type === 'solar') panelCells.add(`${item.col},${item.row}`);
-        else if (MOUNT_TYPES[item?.type]) mounts.push({ ...item, panels: [] });
-      }
-
-      for (const mount of mounts) {
-        if (panelCells.has(`${mount.col},${mount.row}`)) mount.panels = [true];
-      }
-
-      return mounts.map((m) => ({ ...m, row: m.row - OLD_FIRST_ROW }));
-    }
-
-    if (!raw || !Array.isArray(raw.mounts)) return [];
-
-    // v3 already uses the current grid; anything older needs the row shift.
-    const shift = (raw.v ?? 1) >= SAVE_VERSION ? 0 : OLD_FIRST_ROW;
-    return raw.mounts.map((m) => ({ ...m, row: m.row - shift }));
+  /** Serialises the scene into the shape the API expects. */
+  layoutPayload() {
+    return this.mounts.map((mount) => ({
+      type: mount.getData('mountType'),
+      col: mount.getData('gridCol'),
+      row: mount.getData('gridRow'),
+      panels: mount.getData('panels').map(Boolean),
+    }));
   }
 
-  restorePlacement() {
-    this.discardLegacyPlacement();
+  /**
+   * Schedules a save.
+   *
+   * Edits arrive in bursts — adding two panels to a double is two clicks a
+   * second apart — so writes are coalesced instead of firing a request per
+   * click. The server rate-limits this endpoint, and a full replace means the
+   * last write wins, so debouncing is both cheaper and safe.
+   */
+  queueSave() {
+    if (this.saveTimer) this.saveTimer.remove(false);
+    this.saveTimer = this.time.delayedCall(500, () => this.flushSave());
+  }
 
-    const key = this.placementStorageKey();
-    if (!key) return;
+  async flushSave() {
+    // Serialise saves: a reply that arrives after a newer edit would report a
+    // stale power figure.
+    if (this.saveInFlight) {
+      this.savePending = true;
+      return;
+    }
 
-    let raw;
-    try {
-      raw = JSON.parse(localStorage.getItem(key));
-    } catch {
-      try {
-        localStorage.removeItem(key);
-      } catch {
-        /* storage unavailable */
+    this.saveInFlight = true;
+    this.savePending = false;
+
+    const result = await saveLayout(this.layoutPayload());
+
+    this.saveInFlight = false;
+
+    if (result.ok) {
+      this.serverPowerRate = result.powerRate;
+      this.networkBaseline = result.networkBaseline;
+      this.refreshToolbar();
+    } else {
+      /**
+       * A rejected layout means the client and server disagree — usually the
+       * inventory changed elsewhere. Reloading is the honest response: showing a
+       * farm the server refuses to store would misreport income.
+       */
+      console.error('[game] layout rejected:', result.error, result.problems);
+      this.toasts.show(result.problems?.[0] || result.error, 'error', { duration: 5000 });
+      await this.loadLayoutFromServer({ silent: true });
+    }
+
+    if (this.savePending) this.queueSave();
+  }
+
+  /** Clears the scene of mounts, cables and pulses. */
+  clearFarm() {
+    for (const mount of this.mounts) mount.destroy();
+    this.mounts = [];
+    this.occupancy.clear();
+    this.cableLayer.removeAll(true);
+    this.pulses = [];
+  }
+
+  /**
+   * Loads the authoritative layout and rebuilds the scene from it.
+   *
+   * @param {{ silent?: boolean }} [options] `silent` suppresses the failure
+   *   toast, used when reloading after a rejected save already reported why.
+   */
+  async loadLayoutFromServer({ silent = false } = {}) {
+    this.discardLocalLayouts();
+
+    const data = await loadLayout();
+
+    if (!data) {
+      if (!silent) {
+        this.toasts.show('Could not load your farm — check your connection', 'error', {
+          duration: 6000,
+        });
       }
       return;
     }
 
-    const saved = this.normaliseSaved(raw);
+    this.clearFarm();
+
+    this.serverPowerRate = data.powerRate;
+    this.networkBaseline = data.networkBaseline;
+
     let skipped = 0;
 
-    for (const entry of saved) {
+    for (const entry of data.mounts) {
       if (!MOUNT_TYPES[entry?.type]) continue;
 
       const col = Number(entry.col);
       const row = Number(entry.row);
       if (!Number.isInteger(col) || !Number.isInteger(row)) continue;
 
+      // The server validates placement, so this should always pass; it guards
+      // against a client/server grid mismatch after a release.
       if (!this.canPlaceAt(entry.type, col, row)) {
         skipped += 1;
         continue;
@@ -1029,18 +1061,12 @@ export default class FarmScene extends Phaser.Scene {
     }
 
     if (skipped > 0) {
-      // The grid changed shape, so some layouts genuinely cannot be restored.
-      // Say so instead of letting items quietly vanish from the farm.
-      this.toasts.show(
-        `${skipped} mount${skipped > 1 ? 's' : ''} returned to storage — grid resized`,
-        'info',
-        { duration: 5000 }
-      );
+      console.warn(`[game] ${skipped} stored mount(s) do not fit the current grid`);
     }
 
     this.emitPlacement();
-    this.savePlacement();
     this.rebuildCables();
+    this.refreshEditGrid();
     this.refreshToolbar();
   }
 
@@ -1048,7 +1074,7 @@ export default class FarmScene extends Phaser.Scene {
 
   commit() {
     this.emitPlacement();
-    this.savePlacement();
+    this.queueSave();
     this.rebuildCables();
     this.refreshEditGrid();
     this.refreshToolbar();
@@ -1057,7 +1083,11 @@ export default class FarmScene extends Phaser.Scene {
   emitPlacement() {
     notifyPlacementChange(
       this.countPlacedPanels(),
-      this.countPlaced('mount_single') + this.countPlaced('mount_double')
+      this.countPlaced('mount_single') + this.countPlaced('mount_double'),
+      // Locally computed so the React panels update on the same frame as the
+      // edit; the server's figure replaces it once the save returns.
+      this.totalPlacedOutput(),
+      this.networkBaseline
     );
   }
 

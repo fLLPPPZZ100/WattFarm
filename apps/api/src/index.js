@@ -10,6 +10,7 @@ import { globalLimiter, limitersEnabled } from './middleware/rateLimit.js';
 
 import authRoutes from './routes/auth.js';
 import assetsRoutes from './routes/assets.js';
+import farmRoutes from './routes/farm.js';
 import minigamesRoutes from './routes/minigames.js';
 import miningRoutes from './routes/mining.js';
 import usersRoutes from './routes/users.js';
@@ -69,7 +70,7 @@ const corsOptions = {
     // in logs instead of silently omitting CORS headers.
     return callback(new Error(`Origin not allowed by CORS: ${origin}`));
   },
-  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   // No cookies are used; keeping this false avoids the credentialed-CORS rules.
   credentials: false,
@@ -97,6 +98,7 @@ app.get('/health', (_req, res) => {
 /* ── Routes ── */
 app.use('/api/auth', authRoutes);
 app.use('/api/assets', assetsRoutes);
+app.use('/api/farm', farmRoutes);
 app.use('/api/minigames', minigamesRoutes);
 app.use('/api/mining', miningRoutes);
 app.use('/api/users', usersRoutes);
@@ -157,6 +159,7 @@ async function start() {
       `[api] trusted proxy hops: ${env.TRUST_PROXY_HOPS}` +
         (env.TRUST_PROXY_HOPS === 0 ? ' (client IP taken from the socket)' : '')
     );
+    console.log(`[api] synthetic network power: ${env.NETWORK_POWER_BASELINE} W/s`);
   });
 }
 
