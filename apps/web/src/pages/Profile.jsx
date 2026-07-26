@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/apiClient.js';
 import { friendlyAuthError } from '../lib/authErrors.js';
 import AvatarPicker from '../components/profile/AvatarPicker.jsx';
-import { getAvatarImage } from '../data/avatars.js';
+import AccountPanel from '../components/profile/AccountPanel.jsx';
 
 const NETWORK_NAMES = {
   solar: 'Solar',
@@ -12,7 +12,9 @@ const NETWORK_NAMES = {
 };
 
 export default function Profile() {
-  const { user, account, patchAccount } = useAuth();
+  // Identity fields moved into AccountPanel, which reads them from useAuth
+  // itself; this page only needs the account row for the avatar selection.
+  const { account, patchAccount } = useAuth();
   const [allocations, setAllocations] = useState({
     solar: 0,
     wind: 0,
@@ -117,35 +119,8 @@ export default function Profile() {
         <h2 className="font-display text-2xl text-accent-watt tracking-wide">PROFILE</h2>
       </div>
 
-      {/* User info */}
-      <div className="bg-bg-panel border border-line-dusk rounded-lg p-6">
-        <h3 className="font-display text-sm text-text-primary tracking-wide mb-3">
-          ACCOUNT
-        </h3>
-        <div className="flex items-center gap-4">
-          {/* Shows the equipped avatar at the size the header uses, so the
-              player can see what the choice below actually changes. */}
-          <div
-            className="shrink-0 rounded-lg overflow-hidden border border-line-dusk bg-bg-abyss"
-            style={{ width: '64px', height: '64px' }}
-          >
-            <img
-              src={getAvatarImage(activeAvatarId)}
-              alt=""
-              className="w-full h-full object-cover block"
-              style={{ imageRendering: 'pixelated' }}
-            />
-          </div>
-          <div className="min-w-0">
-            <p className="text-text-muted text-sm truncate">
-              Email: <span className="text-text-primary">{user.email}</span>
-            </p>
-            <p className="text-text-muted text-xs mt-1">
-              User ID: <span className="font-mono text-text-muted">{user.uid.slice(0, 8)}...</span>
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* Identity, membership dates, nickname and password */}
+      <AccountPanel />
 
       {/* Avatar */}
       <div className="bg-bg-panel border border-line-dusk rounded-lg p-6">

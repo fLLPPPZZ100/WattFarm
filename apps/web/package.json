@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test:account-age": "node scripts/test-account-age.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
