@@ -22,30 +22,76 @@ const PURCHASABLE_TYPES = ['solar', 'panel-mount', 'panel-mount-double'];
 /** Upper bound on a single purchase, to keep quantities and totals sane. */
 const MAX_PURCHASE_QUANTITY = 1000;
 
-// GET /api/assets/catalog — list all assets with current price
+/**
+ * Counts how many of each asset type a player has installed.
+ * @param {{ type: string, panels: boolean[] }[]} placedMounts
+ */
+function countPlacedByAsset(placedMounts) {
+  const placed = {};
+  let panels = 0;
+
+  for (const mount of placedMounts) {
+    const def = MOUNT_TYPES[mount.type];
+    if (!def) continue;
+    placed[def.assetType] = (placed[def.assetType] || 0) + 1;
+    panels += (mount.panels || []).filter(Boolean).length;
+  }
+
+  placed[PANEL_ASSET_TYPE] = panels;
+  return placed;
+}
+
+/**
+ * GET /api/assets/catalog — everything the shop needs to render an item.
+ *
+ * The price comes from here and nowhere else. The shop used to hardcode mount
+ * prices in the frontend, so raising the double mount to 45 VLT left the page
+ * advertising 25 while the server charged 45 — the player was billed a
+ * different number from the one they clicked.
+ *
+ * Mount stats (cells, bays, bonus) are included for the same reason: the bonus
+ * is the entire argument for buying a wider mount, and it is defined here.
+ */
 router.get('/catalog', verifyAuth, async (req, res) => {
   try {
-    const catalog = await prisma.assetCatalog.findMany();
-
-    const playerAssets = await prisma.playerAsset.findMany({
-      where: { userId: req.uid },
-    });
+    const [catalog, playerAssets, placedMounts] = await Promise.all([
+      prisma.assetCatalog.findMany(),
+      prisma.playerAsset.findMany({ where: { userId: req.uid } }),
+      prisma.placedMount.findMany({ where: { userId: req.uid } }),
+    ]);
 
     const quantityMap = {};
-    for (const pa of playerAssets) {
-      quantityMap[pa.type] = pa.quantity;
-    }
+    for (const asset of playerAssets) quantityMap[asset.type] = asset.quantity;
 
-    // Prices are Decimal in the database; emit numbers so the frontend
-    // contract is unchanged.
-    const result = catalog.map((item) => ({
-      type: item.type,
-      basePrice: moneyToNumber(item.basePrice),
-      multiplier: item.multiplier,
-      baseW: item.baseW,
-      currentPrice: moneyToNumber(item.basePrice),
-      quantityOwned: quantityMap[item.type] || 0,
-    }));
+    const placedMap = countPlacedByAsset(placedMounts);
+
+    const result = catalog.map((item) => {
+      const owned = quantityMap[item.type] || 0;
+      const placed = placedMap[item.type] || 0;
+
+      // Mount definitions are keyed by mount id, not asset type.
+      const mountEntry = Object.entries(MOUNT_TYPES).find(
+        ([, def]) => def.assetType === item.type
+      );
+
+      return {
+        type: item.type,
+        // Decimal in the database; emitted as a JSON number.
+        price: moneyToNumber(item.basePrice),
+        baseW: item.baseW,
+        owned,
+        placed,
+        available: Math.max(0, owned - placed),
+        ...(mountEntry
+          ? {
+              mountType: mountEntry[0],
+              cells: mountEntry[1].cells,
+              bays: mountEntry[1].bays,
+              powerBonus: mountEntry[1].powerBonus,
+            }
+          : {}),
+      };
+    });
 
     res.json({ catalog: result });
   } catch (err) {
@@ -199,19 +245,10 @@ router.get('/mine', verifyAuth, async (req, res) => {
 
     /**
      * How many of each asset are installed, so the client can show what is
-     * actually free without recomputing it from a partial view. Storage used to
-     * subtract a combined mount count from the single-mount total, which made
-     * doubles eat into the singles' availability.
+     * actually free. Storage used to subtract a combined mount count from the
+     * single-mount total, which made doubles eat into the singles' availability.
      */
-    const placedByAsset = {};
-    let placedPanels = 0;
-    for (const mount of placedMounts) {
-      const def = MOUNT_TYPES[mount.type];
-      if (!def) continue;
-      placedByAsset[def.assetType] = (placedByAsset[def.assetType] || 0) + 1;
-      placedPanels += (mount.panels || []).filter(Boolean).length;
-    }
-    placedByAsset[PANEL_ASSET_TYPE] = placedPanels;
+    const placedByAsset = countPlacedByAsset(placedMounts);
 
     res.json({
       assets: playerAssets.map((asset) => ({

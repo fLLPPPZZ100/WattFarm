@@ -39,15 +39,23 @@ export const useAssetsStore = create((set, get) => ({
     }
   },
 
+  /**
+   * Buys an asset and refreshes the derived data.
+   *
+   * The failure is thrown for the caller to show next to the button, and
+   * deliberately does *not* land in the store's `error`. That field means "the
+   * cached data may be stale", and a rejected purchase does not make it stale —
+   * reusing it for both caused a failed buy to render as a page-level error.
+   */
   buyAsset: async (type, quantity) => {
-    set({ loading: true, error: null });
+    set({ loading: true });
     try {
       const data = await api.post('/api/assets/buy', { type, quantity: quantity || 1 });
       await Promise.all([get().fetchCatalog(), get().fetchMining()]);
       set({ loading: false });
       return data;
     } catch (err) {
-      set({ loading: false, error: err.message });
+      set({ loading: false });
       throw err;
     }
   },

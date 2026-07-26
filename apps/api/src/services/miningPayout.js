@@ -32,7 +32,8 @@ import { getNetworkPower, BUDGET_PER_CYCLE } from './networkPower.js';
 
 /** Exported for tests and for the manual runner script. */
 export async function runPayoutCycle() {
-  const network = await getNetworkPower();
+  // A payout must never pay against a stale snapshot.
+  const network = await getNetworkPower({ maxAgeMs: 0 });
 
   if (network.miners.length === 0) return { paid: 0, network };
 

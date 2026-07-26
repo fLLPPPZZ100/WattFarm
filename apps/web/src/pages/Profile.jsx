@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/apiClient.js';
+import { useAssetsStore } from '../store/assetsStore';
+import AvatarPicker from '../components/profile/AvatarPicker';
 
 /**
  * Account page.
@@ -15,7 +17,8 @@ import { api } from '../lib/apiClient.js';
  * earnings.
  */
 export default function Profile() {
-  const { user, emailVerified } = useAuth();
+  const { user, emailVerified, account, refreshAccount } = useAuth();
+  const { vltBalance, fetchMining } = useAssetsStore();
 
   const [network, setNetwork] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,8 +40,17 @@ export default function Profile() {
     }
 
     load();
+    fetchMining();
     return () => controller.abort();
-  }, []);
+  }, [fetchMining]);
+
+  /**
+   * Unlocking or equipping an avatar changes the balance and the unlocked list,
+   * both of which live on the backend account record.
+   */
+  const handleAvatarChanged = useCallback(async () => {
+    await Promise.all([refreshAccount(), fetchMining()]);
+  }, [refreshAccount, fetchMining]);
 
   const sharePercent =
     network && network.networkTotal > 0 ? (network.powerRate / network.networkTotal) * 100 : 0;
@@ -63,6 +75,21 @@ export default function Profile() {
         <p className="text-text-muted text-xs mt-1">
           User ID: <span className="font-mono text-text-muted">{user.uid.slice(0, 8)}...</span>
         </p>
+      </div>
+
+      {/* Avatars */}
+      <div className="bg-bg-panel border border-line-dusk rounded-lg p-6">
+        <h3 className="font-display text-sm text-text-primary tracking-wide mb-1">AVATAR</h3>
+        <p className="text-text-muted text-xs mb-5">
+          Unlock avatars with VLT. Prices are set server-side.
+        </p>
+
+        <AvatarPicker
+          unlockedAvatars={account?.unlockedAvatars || ['default']}
+          activeAvatarId={account?.avatarId || 'default'}
+          vltBalance={vltBalance}
+          onAvatarChanged={handleAvatarChanged}
+        />
       </div>
 
       {/* Network standing */}

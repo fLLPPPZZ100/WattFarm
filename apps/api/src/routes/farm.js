@@ -11,7 +11,7 @@ import {
   publicConfig,
 } from '../config/mounts.js';
 import { computePowerRate } from '../services/powerCalculator.js';
-import { getNetworkPower } from '../services/networkPower.js';
+import { getNetworkPower, invalidateNetworkPower } from '../services/networkPower.js';
 
 const router = Router();
 
@@ -162,6 +162,9 @@ router.put('/layout', verifyAuthStrict, configLimiter, async (req, res) => {
         return { status: 400, body: { error: 'Invalid layout', problems } };
       }
 
+      // The cached network total is about to be wrong.
+      invalidateNetworkPower();
+
       await tx.placedMount.deleteMany({ where: { userId: req.uid } });
 
       if (submitted.length > 0) {
@@ -183,7 +186,7 @@ router.put('/layout', verifyAuthStrict, configLimiter, async (req, res) => {
 
       // Read the network inside the transaction so the returned total already
       // reflects the layout just written.
-      const network = await getNetworkPower(tx);
+      const network = await getNetworkPower({ client: tx });
 
       return {
         status: 200,
