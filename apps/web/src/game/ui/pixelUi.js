@@ -114,6 +114,64 @@ export function createGroundShadow(scene, { width, y, offsetX = 4, alpha = 0.26 
 }
 
 /**
+ * A sagging cable drawn as stepped pixel blocks.
+ *
+ * A straight line between two mounts looks like a wire diagram; real cables
+ * hang. The sag follows a parabola, `4t(1-t)`, sampled at whole-pixel steps so
+ * every block lands on the grid — the same reason the ground shadow is banded
+ * rather than blurred.
+ *
+ * Also returns the sampled points, which the caller uses to animate a pulse
+ * travelling along the cable.
+ *
+ * @param {Phaser.Scene} scene
+ * @param {object} options
+ * @param {number} options.x1 start, in the same space as the returned objects
+ * @param {number} options.y1
+ * @param {number} options.x2 end
+ * @param {number} options.y2
+ * @param {number} [options.sag] peak droop in pixels
+ * @param {number} [options.step] horizontal size of each block
+ * @param {number} [options.thickness]
+ * @param {number} [options.color]
+ * @returns {{ objects: Phaser.GameObjects.Rectangle[], points: {x:number,y:number}[] }}
+ */
+export function createSaggingCable(
+  scene,
+  { x1, y1, x2, y2, sag = 8, step = 4, thickness = 2, color = 0x101c26 }
+) {
+  const objects = [];
+  const points = [];
+
+  const span = x2 - x1;
+  const distance = Math.abs(span);
+  const segments = Math.max(2, Math.round(distance / step));
+
+  for (let i = 0; i <= segments; i += 1) {
+    const t = i / segments;
+
+    const x = x1 + span * t;
+    // Linear interpolation between the endpoints, plus the parabolic droop.
+    const y = y1 + (y2 - y1) * t + sag * 4 * t * (1 - t);
+
+    // Snapping keeps the cable crisp; without it the blocks land on
+    // half-pixels and the line looks smeared.
+    const px = Math.round(x);
+    const py = Math.round(y);
+
+    points.push({ x: px, y: py });
+
+    // The last sample is the endpoint itself, already covered by the previous
+    // block, so drawing it would overshoot the connector.
+    if (i < segments) {
+      objects.push(scene.add.rectangle(px, py, step + 1, thickness, color, 1));
+    }
+  }
+
+  return { objects, points };
+}
+
+/**
  * A bevelled panel container.
  *
  * @returns {Phaser.GameObjects.Container} with `contentWidth` / `contentHeight`

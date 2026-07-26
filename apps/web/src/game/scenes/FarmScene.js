@@ -12,6 +12,7 @@ import {
   createDivider,
   createToastManager,
   createGroundShadow,
+  createSaggingCable,
 } from '../ui/pixelUi.js';
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -83,6 +84,34 @@ const MOUNT_TYPES = {
 };
 
 /**
+ * Cabling between powered mounts.
+ *
+ * Only mounts carrying at least one panel are wired: the cable is the visual
+ * proof that a mount is actually generating, so an empty frame staying
+ * unconnected is the point rather than an omission.
+ *
+ * `connectorInset` is how far in from the mount's footprint edge the cable
+ * attaches, and `y` places it just above the feet so it reads as running along
+ * the ground behind the frames.
+ */
+const CABLE = {
+  y: 22,
+  connectorInset: 6,
+  colour: 0x101c26,
+  step: 4,
+  thickness: 2,
+  /**
+   * Droop is proportional to span, capped so a long run stays inside its own
+   * cell: the cable sits at y=22 and the cell ends at y=32, so anything above
+   * 8 would dip into the row below.
+   */
+  sagRatio: 0.14,
+  maxSag: 8,
+  /** Milliseconds between pulse advances — lower is faster. */
+  pulseInterval: 55,
+};
+
+/**
  * Ground shadow placement, shared by both mounts.
  *
  * `y` is where the legs meet the grass, measured from the sprites: the last
@@ -97,6 +126,7 @@ const PANEL_BASE_W = 1;
 const DEPTH = {
   grid: 5,
   cellButton: 6,
+  cables: 9,
   entities: 10,
   toolbar: 800,
   popup: 850,
@@ -130,7 +160,19 @@ export default class FarmScene extends Phaser.Scene {
     const bg = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'bg_game');
     bg.setDisplaySize(GAME_WIDTH, GAME_HEIGHT);
 
+    // Cables sit behind the mounts so they read as running along the ground.
+    this.cableLayer = this.add.container(0, 0).setDepth(DEPTH.cables);
     this.entityLayer = this.add.container(0, 0).setDepth(DEPTH.entities);
+
+    /** @type {{ points: {x:number,y:number}[], dot: Phaser.GameObjects.Rectangle, glow: Phaser.GameObjects.Rectangle, index: number }[]} */
+    this.pulses = [];
+
+    // One timer drives every pulse, rather than a tween per cable.
+    this.pulseTimer = this.time.addEvent({
+      delay: CABLE.pulseInterval,
+      loop: true,
+      callback: () => this.advancePulses(),
+    });
 
     this.toasts = createToastManager(this, {
       x: GAME_WIDTH / 2,
@@ -764,6 +806,109 @@ export default class FarmScene extends Phaser.Scene {
     this.commit();
   }
 
+  /* ══ CABLING ══ */
+
+  /** True when a mount carries at least one panel, i.e. is generating. */
+  isPowered(mount) {
+    return mount.getData('panels').some(Boolean);
+  }
+
+  /** Horizontal edge of a mount's footprint, where a cable attaches. */
+  connectorX(mount, side) {
+    const def = MOUNT_TYPES[mount.getData('mountType')];
+    const halfWidth = def.shadowWidth / 2 - CABLE.connectorInset;
+    return mount.x + (side === 'right' ? halfWidth : -halfWidth);
+  }
+
+  connectorY(mount) {
+    return mount.y + CABLE.y;
+  }
+
+  /**
+   * Redraws every cable from scratch.
+   *
+   * Rebuilding is cheap — a few dozen rectangles — and it removes a whole class
+   * of bug: there is no incremental state to get out of step with the mounts
+   * after a placement, removal, or a layout restore.
+   */
+  rebuildCables() {
+    this.cableLayer.removeAll(true);
+    this.pulses = [];
+
+    // Wire each row independently: a run of cable across rows would have to
+    // cross the field, which is not how a panel row is actually strung.
+    for (let row = 0; row < GRID_ROWS; row += 1) {
+      const powered = this.mounts
+        .filter((m) => m.getData('gridRow') === row && this.isPowered(m))
+        .sort((a, b) => a.getData('gridCol') - b.getData('gridCol'));
+
+      // A single generating mount has nothing to connect to.
+      if (powered.length < 2) continue;
+
+      /** Concatenated path across the whole row, for the pulse to travel. */
+      const path = [];
+
+      for (let i = 0; i < powered.length - 1; i += 1) {
+        const from = powered[i];
+        const to = powered[i + 1];
+
+        const x1 = this.connectorX(from, 'right');
+        const x2 = this.connectorX(to, 'left');
+
+        // Adjacent mounts can leave almost no gap, in which case a cable would
+        // be a single stray block — skip it and let the frames read as touching.
+        if (x2 - x1 < CABLE.step) continue;
+
+        const span = x2 - x1;
+        const sag = Math.min(CABLE.maxSag, span * CABLE.sagRatio);
+
+        const { objects, points } = createSaggingCable(this, {
+          x1,
+          y1: this.connectorY(from),
+          x2,
+          y2: this.connectorY(to),
+          sag,
+          step: CABLE.step,
+          thickness: CABLE.thickness,
+          color: CABLE.colour,
+        });
+
+        this.cableLayer.add(objects);
+        path.push(...points);
+      }
+
+      if (path.length > 1) this.createPulse(path);
+    }
+  }
+
+  /**
+   * A bright block travelling the row's cable, suggesting current flow.
+   *
+   * Two rectangles: a dim halo and a bright core. That is as close to a glow as
+   * the pixel style allows — an actual blur or particle would look foreign.
+   */
+  createPulse(path) {
+    const start = path[0];
+
+    const glow = this.add.rectangle(start.x, start.y, 6, 6, C.current, 0.22);
+    const dot = this.add.rectangle(start.x, start.y, 3, 3, C.current, 0.95);
+
+    this.cableLayer.add([glow, dot]);
+    this.pulses.push({ path, dot, glow, index: 0 });
+  }
+
+  /** Advances every pulse one sample along its path, wrapping at the end. */
+  advancePulses() {
+    if (!this.pulses.length) return;
+
+    for (const pulse of this.pulses) {
+      pulse.index = (pulse.index + 1) % pulse.path.length;
+      const point = pulse.path[pulse.index];
+      pulse.dot.setPosition(point.x, point.y);
+      pulse.glow.setPosition(point.x, point.y);
+    }
+  }
+
   /* ══ PERSISTENCE ══ */
 
   /**
@@ -895,6 +1040,7 @@ export default class FarmScene extends Phaser.Scene {
 
     this.emitPlacement();
     this.savePlacement();
+    this.rebuildCables();
     this.refreshToolbar();
   }
 
@@ -903,6 +1049,7 @@ export default class FarmScene extends Phaser.Scene {
   commit() {
     this.emitPlacement();
     this.savePlacement();
+    this.rebuildCables();
     this.refreshEditGrid();
     this.refreshToolbar();
   }
