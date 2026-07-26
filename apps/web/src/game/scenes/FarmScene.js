@@ -27,10 +27,25 @@ const GRID_ROWS_END = 5;
  * +6.5 surface centre with each bay centre gives -15.5 - 6.5 = -22 and
  * 28.5 - 6.5 = +22.
  *
- * `cells` is how many grid columns the mount reserves. The double sprite is
- * 128px wide inside a 96px tile, so treating it as one cell made two adjacent
- * doubles overlap by 32px — which is what made one appear to sit on top of the
- * other. Reserving two columns removes the overlap entirely.
+ * `cells` is how many grid columns the mount reserves. Both mounts take a
+ * single cell: the double is the premium option (25 VLT against 15), so its
+ * value is fitting two panels in the space of one — reserving two cells would
+ * cancel that out and make it strictly worse than two singles.
+ *
+ * The double's canvas is 128px against a 96px tile, but its opaque content is
+ * only 107px wide, so the sprites are far better behaved than the canvas size
+ * suggests. Measured clearances between neighbouring cells:
+ *
+ *   single + single    34px gap
+ *   single + double    12px gap
+ *   double + single    12px gap
+ *   double + double    10px overlap
+ *
+ * Two adjacent doubles are therefore the only pair that touch, overlapping by
+ * 10px of 107 (about 9%), which reads as two frames standing side by side. The
+ * depth rule below makes that overlap consistent — the left mount always draws
+ * on top — instead of the previous behaviour where the right one covered the
+ * left one's visible face.
  */
 const MOUNT_TYPES = {
   mount_single: {
@@ -41,7 +56,7 @@ const MOUNT_TYPES = {
   },
   mount_double: {
     texture: 'mount_double',
-    cells: 2,
+    cells: 1,
     label: 'Mount 2x',
     slots: [
       { dx: -22, dy: 0 },
@@ -364,11 +379,6 @@ export default class FarmScene extends Phaser.Scene {
     const singleAvail = this.availableMounts('mount_single');
     const doubleAvail = this.availableMounts('mount_double');
 
-    // A double needs the neighbouring column as well, so it can be unavailable
-    // purely for lack of room — worth saying explicitly rather than just
-    // greying the button out.
-    const doubleFits = this.canPlaceAt('mount_double', col, row);
-
     this.addPopupButton(menu, {
       x: -70,
       y: 8,
@@ -384,7 +394,7 @@ export default class FarmScene extends Phaser.Scene {
       x: 70,
       y: 8,
       label: `Mount 2x  (${Math.max(0, doubleAvail)})`,
-      enabled: doubleAvail > 0 && doubleFits,
+      enabled: doubleAvail > 0,
       onClick: () => {
         this.placeMount('mount_double', col, row);
         this.hidePopup();
@@ -393,18 +403,11 @@ export default class FarmScene extends Phaser.Scene {
 
     menu.add(
       this.add
-        .text(
-          0,
-          38,
-          doubleAvail > 0 && !doubleFits
-            ? 'Mount 2x needs two free cells side by side'
-            : 'Mount 2x occupies two cells and holds two panels',
-          {
-            fontFamily: 'Inter, sans-serif',
-            fontSize: '10px',
-            color: doubleAvail > 0 && !doubleFits ? '#FF6B6B' : '#7C8CA0',
-          }
-        )
+        .text(0, 38, 'Mount 2x holds two panels in the same cell', {
+          fontFamily: 'Inter, sans-serif',
+          fontSize: '10px',
+          color: '#7C8CA0',
+        })
         .setOrigin(0.5)
     );
   }
