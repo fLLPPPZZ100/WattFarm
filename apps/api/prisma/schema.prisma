@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String             @id // firebase uid
+  email           String             @unique
+  vltBalance      Float              @default(0)
+  avatarId        String             @default("default")
+  unlockedAvatars String[]           @default(["default"])
+  createdAt       DateTime           @default(now())
+  assets          PlayerAsset[]
+  minigameLogs    MinigameSession[]
+  miningAllocations MiningAllocation[]
+  payouts         PlayerPayout[]
+}
+
+model AssetCatalog {
+  type       String  @id // "solar" | "wind" | "hydro"
+  basePrice  Float
+  multiplier Float
+  baseW      Float
+}
+
+model PlayerAsset {
+  id            String   @id @default(uuid())
+  userId        String
+  type          String
+  quantity      Int      @default(0)
+  lastCollected DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id])
+}
+
+model MinigameSession {
+  id           String   @id @default(uuid())
+  userId       String
+  game         String
+  timestamp    DateTime @default(now())
+  cooldownTier Int
+  result       String   // "none" | "common" | "rare" | "epic"
+  vltEarned    Float
+  user         User     @relation(fields: [userId], references: [id])
+}
+
+model MiningAllocation {
+  id         String   @id @default(uuid())
+  userId     String
+  network    String   // "solar" | "wind" | "hydro"
+  percentage Float    // 0–100, user-defined split
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id])
+}
+
+model PlayerPayout {
+  id         String   @id @default(uuid())
+  userId     String
+  amount     Float
+  details    String   // JSON string with breakdown per network
+  timestamp  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+}

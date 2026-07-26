@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Inter', sans-serif;
+  }
+
+  img {
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+  }
+}
