@@ -85,6 +85,35 @@ export function bevelLayers(scene, w, h, options = {}) {
 }
 
 /**
+ * A stepped ground shadow.
+ *
+ * A blurred ellipse would clash with the pixel art, so this stacks three hard
+ * 2px bands of decreasing width. At this scale the silhouette reads as an
+ * ellipse while every edge stays on the pixel grid, and varying the alpha per
+ * band fakes softness without any actual blur.
+ *
+ * The caller positions it: the sun in the background sits top-left, so shadows
+ * are offset slightly right of the object's base.
+ *
+ * @param {Phaser.Scene} scene
+ * @param {object} options
+ * @param {number} options.width width of the widest band
+ * @param {number} options.y vertical centre, in container coordinates
+ * @param {number} [options.offsetX] horizontal shift, away from the light
+ * @param {number} [options.alpha] opacity of the central band
+ * @returns {Phaser.GameObjects.Rectangle[]} bands, back to front
+ */
+export function createGroundShadow(scene, { width, y, offsetX = 4, alpha = 0.26 }) {
+  const narrow = Math.round(width * 0.6);
+
+  return [
+    scene.add.rectangle(offsetX, y - 2, narrow, 2, 0x000000, alpha * 0.6),
+    scene.add.rectangle(offsetX, y, width, 2, 0x000000, alpha),
+    scene.add.rectangle(offsetX, y + 2, narrow, 2, 0x000000, alpha * 0.6),
+  ];
+}
+
+/**
  * A bevelled panel container.
  *
  * @returns {Phaser.GameObjects.Container} with `contentWidth` / `contentHeight`

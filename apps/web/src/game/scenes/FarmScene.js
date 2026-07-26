@@ -11,6 +11,7 @@ import {
   createLabel,
   createDivider,
   createToastManager,
+  createGroundShadow,
 } from '../ui/pixelUi.js';
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -64,6 +65,8 @@ const MOUNT_TYPES = {
     label: 'Mount 1x',
     powerBonus: 0,
     slots: [{ dx: 0, dy: 0 }],
+    // Feet touch the ground at container y=+28, spanning x -26..+24 (51px).
+    shadowWidth: 54,
   },
   mount_double: {
     texture: 'mount_double',
@@ -74,8 +77,19 @@ const MOUNT_TYPES = {
       { dx: -22, dy: 0 },
       { dx: 22, dy: 0 },
     ],
+    // Feet touch the ground at container y=+28, spanning x -48..+46 (95px).
+    shadowWidth: 98,
   },
 };
+
+/**
+ * Ground shadow placement, shared by both mounts.
+ *
+ * `y` is where the legs meet the grass, measured from the sprites: the last
+ * opaque row of both textures is canvas y=60, which is +28 from the centre.
+ * The sun in the background sits top-left, so the shadow is nudged right.
+ */
+const SHADOW = { y: 29, offsetX: 4, alpha: 0.26 };
 
 /** Watts per second produced by one panel before mount bonuses. */
 const PANEL_BASE_W = 1;
@@ -649,7 +663,19 @@ export default class FarmScene extends Phaser.Scene {
     container.setDepth(this.mountDepth(col, row));
     container.setInteractive({ useHandCursor: true });
 
-    // Frame first, so any panel added later sits above it.
+    // Shadow first of all, so it sits under the frame and its panels. Being a
+    // child of the container means it is positioned, moved and destroyed with
+    // the mount automatically.
+    container.add(
+      createGroundShadow(this, {
+        width: def.shadowWidth,
+        y: SHADOW.y,
+        offsetX: SHADOW.offsetX,
+        alpha: SHADOW.alpha,
+      })
+    );
+
+    // Frame next, so any panel added later sits above it.
     container.add(this.add.image(0, 0, def.texture));
 
     container.on('pointerdown', () => {
