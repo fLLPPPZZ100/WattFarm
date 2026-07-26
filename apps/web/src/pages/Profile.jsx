@@ -1,24 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { auth } from '../firebase';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-async function fetchWithAuth(url, options = {}) {
-  const user = auth.currentUser;
-  if (!user) throw new Error('Not authenticated');
-  const token = await user.getIdToken();
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...options.headers,
-    },
-  });
-  if (!res.ok) throw new Error('Failed to fetch');
-  return res.json();
-}
+import { api } from '../lib/apiClient.js';
+import { friendlyAuthError } from '../lib/authErrors.js';
 
 const NETWORK_NAMES = {
   solar: 'Solar',
@@ -37,29 +20,32 @@ export default function Profile() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // RequireAuth guarantees a provisioned session before this page mounts.
   useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+    const controller = new AbortController();
 
     async function load() {
       try {
-        const data = await fetchWithAuth(`${API_URL}/api/mining/allocations`);
+        const data = await api.get('/api/mining/allocations', { signal: controller.signal });
         const map = { solar: 0, wind: 0, hydro: 0 };
         for (const a of data.allocations) {
           map[a.network] = a.percentage;
         }
         setAllocations(map);
-      } catch {
-        // Use defaults
+      } catch (err) {
+        // Falling back to zeroed sliders is acceptable here, but an aborted
+        // request must not be treated as a real failure.
+        if (err?.name !== 'AbortError') {
+          console.error('[profile] could not load allocations:', err);
+        }
       } finally {
         setLoading(false);
       }
     }
 
     load();
-  }, [user]);
+    return () => controller.abort();
+  }, []);
 
   const handleSliderChange = (network, value) => {
     const newAlloc = { ...allocations, [network]: parseFloat(value) };
@@ -81,31 +67,23 @@ export default function Profile() {
         .filter(([, pct]) => pct > 0)
         .map(([network, percentage]) => ({ network, percentage }));
 
-      await fetchWithAuth(`${API_URL}/api/mining/allocations`, {
-        method: 'POST',
-        body: JSON.stringify({ allocations: allocationList }),
-      });
+      await api.post('/api/mining/allocations', { allocations: allocationList });
 
       setMessage('Mining allocations saved.');
     } catch (err) {
-      setMessage(err.message || 'Failed to save allocations.');
+      setMessage(friendlyAuthError(err));
     } finally {
       setSaving(false);
     }
   };
 
-  if (!user) {
-    return (
-      <div className="text-center py-20">
-        <p className="text-text-muted">Log in to view your profile.</p>
-      </div>
-    );
-  }
-
   if (loading) {
     return (
       <div className="text-center py-20">
-        <p className="text-text-muted">Loading profile data...</p>
+        <p className="font-display text-[11px] uppercase tracking-widest text-text-muted">
+          Carregando perfil
+          <span className="ml-1 inline-block h-3 w-2 bg-accent-watt align-middle animate-blink" />
+        </p>
       </div>
     );
   }

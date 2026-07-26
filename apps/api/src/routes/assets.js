@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
-import verifyAuth from '../middleware/verifyAuth.js';
+import { verifyAuth, verifyAuthStrict, requireVerifiedEmail } from '../middleware/verifyAuth.js';
+import { economyLimiter } from '../middleware/rateLimit.js';
 import { calculateAccumulatedW } from '../services/wCalculator.js';
 
 const router = Router();
@@ -38,10 +39,22 @@ router.get('/catalog', verifyAuth, async (req, res) => {
 // POST /api/assets/buy — purchase one or more assets
 // Body: { type, quantity? (default 1) }
 // Price is calculated progressively: each unit costs more due to the multiplier
-router.post('/buy', verifyAuth, async (req, res) => {
+router.post(
+  '/buy',
+  economyLimiter,
+  verifyAuthStrict,
+  requireVerifiedEmail,
+  async (req, res) => {
   try {
     const { type, quantity } = req.body;
     const qty = Math.max(1, Math.floor(Number(quantity) || 1));
+
+    // Guard against absurd quantities: the transaction below would otherwise
+    // accept e.g. 1e9 units, and Number overflow could make totalPrice lose
+    // precision or become Infinity.
+    if (qty > 1000) {
+      return res.status(400).json({ error: 'Cannot buy more than 1000 units at once.' });
+    }
 
     if (!['solar', 'panel-mount', 'panel-mount-double'].includes(type)) {
       return res.status(400).json({ error: 'Invalid asset type. Must be solar, panel-mount, or panel-mount-double.' });

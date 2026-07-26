@@ -175,14 +175,16 @@ export default function Shop() {
     return function () { clearInterval(pollingRef.current); };
   }, [user, fetchCatalog, fetchMining]);
 
-  if (!user) { return (<div className="flex items-center justify-center py-32"><div className="text-center"><p className="font-display text-xl text-text-muted tracking-wide">SHOP</p><p className="text-text-muted text-sm mt-2">Log in to browse and purchase items.</p></div></div>); }
+  // No unauthenticated branch: RequireAuth gates this route.
   if (error) { return (<div className="flex items-center justify-center py-32"><div className="bg-red-900/20 border border-red-800 rounded-lg p-6 text-center max-w-md"><p className="text-red-400 text-sm">{error}</p></div></div>); }
 
   var ownedMap = {};
   for (var i = 0; i < assets.length; i++) { ownedMap[assets[i].type] = assets[i].quantity; }
 
   var handleBuy = async function (id, qty) {
-    try { await buyAsset(id, qty || 1); } catch (e) {}
+    // buyAsset stores the message in the store's `error`, which is rendered
+    // above; swallowing here just prevents an unhandled rejection.
+    try { await buyAsset(id, qty || 1); } catch (e) { /* surfaced via store error */ }
   };
 
   var genCatalog = catalog.filter(function (c) { return c.type === 'solar'; });

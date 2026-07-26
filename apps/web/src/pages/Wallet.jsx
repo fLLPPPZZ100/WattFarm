@@ -1,65 +1,50 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { auth } from '../firebase';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-async function fetchWithAuth(url) {
-  const user = auth.currentUser;
-  if (!user) throw new Error('Not authenticated');
-  const token = await user.getIdToken();
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  if (!res.ok) throw new Error('Failed to fetch');
-  return res.json();
-}
+import { api } from '../lib/apiClient.js';
 
 export default function Wallet() {
-  const { user } = useAuth();
   const [payouts, setPayouts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [minigameLogs, setMinigameLogs] = useState([]);
+  const [error, setError] = useState('');
 
+  // RequireAuth guarantees a provisioned session before this page mounts, so
+  // there is no unauthenticated branch to handle here any more.
   useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+    const controller = new AbortController();
 
     async function load() {
       try {
         const [historyData, minigameData] = await Promise.all([
-          fetchWithAuth(`${API_URL}/api/mining/history`),
-          fetchWithAuth(`${API_URL}/api/minigames/status`).catch(() => ({ games: [] })),
+          api.get('/api/mining/history', { signal: controller.signal }),
+          api
+            .get('/api/minigames/status', { signal: controller.signal })
+            .catch(() => ({ games: [] })),
         ]);
         setPayouts(historyData.payouts || []);
         // For minigame history we show from the playCountToday
         setMinigameLogs(minigameData.games || []);
-      } catch {
-        // Silently handle
+        setError('');
+      } catch (err) {
+        // Ignore the abort triggered by unmount; report anything else instead
+        // of failing silently as the previous version did.
+        if (err?.name === 'AbortError') return;
+        setError(err.message || 'Não foi possível carregar a carteira.');
       } finally {
         setLoading(false);
       }
     }
 
     load();
-  }, [user]);
-
-  if (!user) {
-    return (
-      <div className="text-center py-20">
-        <p className="text-text-muted">Log in to view your wallet.</p>
-      </div>
-    );
-  }
+    return () => controller.abort();
+  }, []);
 
   if (loading) {
     return (
       <div className="text-center py-20">
-        <p className="text-text-muted">Loading wallet data...</p>
+        <p className="font-display text-[11px] uppercase tracking-widest text-text-muted">
+          Carregando carteira
+          <span className="ml-1 inline-block h-3 w-2 bg-accent-watt align-middle animate-blink" />
+        </p>
       </div>
     );
   }
@@ -72,6 +57,12 @@ export default function Wallet() {
           Track your VLT earnings from mining payouts and minigame rewards.
         </p>
       </div>
+
+      {error && (
+        <div className="border-2 border-danger-crt bg-danger-crt/10 px-3 py-2.5 text-sm text-danger-crt">
+          {error}
+        </div>
+      )}
 
       {/* Mining Payout History */}
       <div className="bg-bg-panel border border-line-dusk rounded-lg p-6">

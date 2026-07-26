@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { auth } from '../firebase';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { api } from '../lib/apiClient.js';
+import { friendlyAuthError } from '../lib/authErrors.js';
 
 const GAME_INFO = {
   'solar-swipe': {
@@ -25,56 +23,36 @@ const GAME_INFO = {
   },
 };
 
-async function fetchWithAuth(url, options = {}) {
-  const user = auth.currentUser;
-  if (!user) throw new Error('Not authenticated');
-  const token = await user.getIdToken();
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...options.headers,
-    },
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data;
-}
-
 export default function Minigames() {
-  const { user } = useAuth();
   const [games, setGames] = useState([]);
   const [playing, setPlaying] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const pollingRef = useRef(null);
 
+  // RequireAuth guarantees a provisioned session before this page mounts.
   const fetchStatus = useCallback(async () => {
-    if (!user) return;
     try {
-      const data = await fetchWithAuth(`${API_URL}/api/minigames/status`);
+      const data = await api.get('/api/minigames/status');
       setGames(data.games);
     } catch {
-      // Silently ignore poll errors
+      // Poll errors are ignored on purpose: a transient failure would
+      // otherwise flash an error every 2 seconds.
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
-    if (!user) return;
     fetchStatus();
     pollingRef.current = setInterval(fetchStatus, 2000);
     return () => clearInterval(pollingRef.current);
-  }, [user, fetchStatus]);
+  }, [fetchStatus]);
 
   const handlePlay = async (game) => {
     setError('');
     setResult(null);
     setPlaying(game);
     try {
-      const data = await fetchWithAuth(`${API_URL}/api/minigames/${game}/play`, {
-        method: 'POST',
-      });
+      const data = await api.post(`/api/minigames/${encodeURIComponent(game)}/play`);
       setResult({
         game,
         result: data.result,
@@ -83,19 +61,13 @@ export default function Minigames() {
       });
       fetchStatus(); // refresh cooldowns immediately
     } catch (err) {
-      setError(err.message);
+      // Surfaces the email-verification gate and rate limits with a readable
+      // message rather than a raw status code.
+      setError(friendlyAuthError(err));
     } finally {
       setPlaying(null);
     }
   };
-
-  if (!user) {
-    return (
-      <div className="text-center py-20">
-        <p className="text-text-muted">Log in to play minigames.</p>
-      </div>
-    );
-  }
 
   const formatCooldown = (ms) => {
     if (ms <= 0) return 'Ready';

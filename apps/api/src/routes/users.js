@@ -1,12 +1,18 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
-import verifyAuth from '../middleware/verifyAuth.js';
+import { verifyAuthStrict, requireVerifiedEmail } from '../middleware/verifyAuth.js';
+import { economyLimiter, configLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
 
 // POST /api/users/me/avatars/:avatarId/unlock
 // Validates the avatar exists, is vlt type, debits VLT, and adds to unlockedAvatars
-router.post('/me/avatars/:avatarId/unlock', verifyAuth, async (req, res) => {
+router.post(
+  '/me/avatars/:avatarId/unlock',
+  economyLimiter,
+  verifyAuthStrict,
+  requireVerifiedEmail,
+  async (req, res) => {
   try {
     const { avatarId } = req.params;
 
@@ -74,7 +80,7 @@ router.post('/me/avatars/:avatarId/unlock', verifyAuth, async (req, res) => {
 
 // PATCH /api/users/me/avatar
 // Receives { avatarId }, validates it's in unlockedAvatars, sets as active
-router.patch('/me/avatar', verifyAuth, async (req, res) => {
+router.patch('/me/avatar', configLimiter, verifyAuthStrict, async (req, res) => {
   try {
     const { avatarId } = req.body;
 

@@ -9,7 +9,10 @@ datasource db {
 
 model User {
   id              String             @id // firebase uid
-  email           String             @unique
+  // Nullable: some Firebase providers (anonymous, phone) supply no address.
+  // Postgres allows many NULLs under a unique index but only one '', so the
+  // previous non-null default collided on the second such account.
+  email           String?            @unique
   vltBalance      Float              @default(0)
   avatarId        String             @default("default")
   unlockedAvatars String[]           @default(["default"])

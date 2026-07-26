@@ -1,50 +1,33 @@
 import { create } from 'zustand';
-import { auth } from '../firebase';
+import { api } from '../lib/apiClient.js';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-async function fetchWithAuth(url, options = {}) {
-  const user = auth.currentUser;
-  if (!user) throw new Error('Not authenticated');
-
-  const token = await user.getIdToken();
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...options.headers,
-    },
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Request failed: ${res.status}`);
-  }
-
-  return res.json();
-}
-
-export const useAssetsStore = create((set, get) => ({
+/** Pristine state, reused for the initial store and for the reset on logout. */
+const initialState = {
   catalog: [],
   totalW: 0,
   vltBalance: 0,
   assets: [],
   loading: false,
   error: null,
+};
+
+export const useAssetsStore = create((set, get) => ({
+  ...initialState,
 
   fetchCatalog: async () => {
     try {
-      const data = await fetchWithAuth(`${API_URL}/api/assets/catalog`);
+      const data = await api.get('/api/assets/catalog');
       set({ catalog: data.catalog, error: null });
     } catch (err) {
+      // The shared client already handles session expiry globally, so here we
+      // only surface the message for display.
       set({ error: err.message });
     }
   },
 
   fetchMining: async () => {
     try {
-      const data = await fetchWithAuth(`${API_URL}/api/assets/mine`);
+      const data = await api.get('/api/assets/mine');
       set({
         assets: data.assets,
         totalW: data.totalW,
@@ -59,10 +42,7 @@ export const useAssetsStore = create((set, get) => ({
   buyAsset: async (type, quantity) => {
     set({ loading: true, error: null });
     try {
-      const data = await fetchWithAuth(`${API_URL}/api/assets/buy`, {
-        method: 'POST',
-        body: JSON.stringify({ type, quantity: quantity || 1 }),
-      });
+      const data = await api.post('/api/assets/buy', { type, quantity: quantity || 1 });
       await Promise.all([get().fetchCatalog(), get().fetchMining()]);
       set({ loading: false });
       return data;
@@ -72,3 +52,14 @@ export const useAssetsStore = create((set, get) => ({
     }
   },
 }));
+
+/**
+ * Wipes cached game data.
+ *
+ * Called on logout: zustand stores are module-level singletons that outlive the
+ * session, so without this the next account to sign in on the same browser
+ * briefly rendered the previous player's balance and inventory.
+ */
+export function resetAssetsStore() {
+  useAssetsStore.setState({ ...initialState });
+}
