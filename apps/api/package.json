@@ -8,6 +8,7 @@
     "start": "node src/index.js",
     "prisma:migrate": "npx prisma migrate dev",
     "prisma:studio": "npx prisma studio",
+    "check:avatars": "node scripts/check-avatar-catalogue.mjs",
     "test:concurrency": "node scripts/test-concurrency.mjs",
     "payout:run": "node scripts/run-payout.mjs"
   },

@@ -328,6 +328,18 @@ export function AuthProvider({ children }) {
     return current.getIdToken(forceRefresh);
   }, []);
 
+  /**
+   * Merges server-confirmed fields into the cached account row.
+   *
+   * Routes like `PATCH /api/users/me/avatar` already return the updated values,
+   * so a consumer that just wrote does not need `refreshAccount`'s extra round
+   * trip to show the result. Only pass values the server returned — this is a
+   * cache update, not an optimistic guess.
+   */
+  const patchAccount = useCallback((patch) => {
+    setAccount((current) => (current ? { ...current, ...patch } : current));
+  }, []);
+
   /** Lets consumers refresh the cached backend row after a balance change. */
   const refreshAccount = useCallback(async () => {
     if (!auth?.currentUser) return null;
@@ -370,6 +382,7 @@ export function AuthProvider({ children }) {
       resendVerificationEmail,
       refreshVerificationStatus,
       refreshAccount,
+      patchAccount,
       retryProvisioning,
       logout,
       getToken,
@@ -387,6 +400,7 @@ export function AuthProvider({ children }) {
       resendVerificationEmail,
       refreshVerificationStatus,
       refreshAccount,
+      patchAccount,
       retryProvisioning,
       logout,
       getToken,
