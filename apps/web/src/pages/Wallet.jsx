@@ -30,7 +30,11 @@ export default function Wallet() {
         if (err?.name === 'AbortError') return;
         setError(err.message || 'Não foi possível carregar a carteira.');
       } finally {
-        setLoading(false);
+        // `finally` runs even after the AbortError early return, so an
+        // unconditional clear reports "loaded" for a request that was cancelled.
+        // Under StrictMode that made the page flash its empty state on every
+        // mount. The same pattern crashed the referral page outright.
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 

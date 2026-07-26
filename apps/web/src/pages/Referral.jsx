@@ -8,6 +8,18 @@ function asPercent(rate) {
   return `${Math.round((rate ?? 0) * 100)}%`;
 }
 
+/**
+ * Formats a VLT amount to two places.
+ *
+ * Takes anything, because calling `.toFixed()` straight on a response field is
+ * how this page managed to blank the entire app: `undefined.toFixed` throws, and
+ * there is no error boundary to contain it. Non-numeric input degrades to 0.00.
+ */
+function toVlt(value) {
+  const amount = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(amount) ? amount.toFixed(2) : '0.00';
+}
+
 function formatDate(value) {
   if (!value) return '—';
   try {
@@ -96,7 +108,16 @@ export default function Referral() {
         if (err?.name === 'AbortError') return;
         setError(err.message || 'Could not load your referral data.');
       } finally {
-        setLoading(false);
+        /**
+         * Not unconditional. `finally` runs even after the `AbortError` early
+         * return, so the previous version cleared the loading flag for a request
+         * that was cancelled and had set neither `data` nor `error`.
+         *
+         * Under StrictMode that happens on every mount: the first effect is torn
+         * down immediately, so the page rendered with data still null and
+         * dereferencing it threw, blanking the whole app.
+         */
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 
@@ -115,10 +136,18 @@ export default function Referral() {
     );
   }
 
-  if (error) {
+  /**
+   * `!data` is checked alongside the error, not assumed away. Any path that
+   * leaves loading false without a payload — a cancelled request, a 204, a
+   * response shape change — must render something rather than fall through to
+   * code that dereferences it.
+   */
+  if (error || !data) {
     return (
       <div className="bg-bg-panel border border-line-dusk rounded-lg p-6">
-        <p className="text-sm text-red-400">{error}</p>
+        <p className="text-sm text-red-400">
+          {error || 'Could not load your referral data.'}
+        </p>
       </div>
     );
   }
@@ -127,11 +156,25 @@ export default function Referral() {
   const qualifyingRate = data.config?.qualifyingPowerRate ?? 0;
   const signupBonus = data.config?.signupBonus ?? 0;
 
+  /**
+   * Every field is defaulted rather than trusted.
+   *
+   * A rendering page has no business crashing over a missing number: without an
+   * error boundary above it, one `undefined.toFixed()` takes down the entire app,
+   * which is exactly what happened here. Defaults mean a partial response
+   * degrades to zeros instead of a white screen.
+   */
+  const points = data.points ?? 0;
+  const totals = data.totals ?? {};
+  const referrals = Array.isArray(data.referrals) ? data.referrals : [];
+  const tiers = Array.isArray(data.config?.levels) ? data.config.levels : [];
+
   // Progress towards the next tier, for the bar.
   const next = data.nextLevel;
-  const progressPercent = next
-    ? Math.min(100, Math.round((data.points / next.pointsRequired) * 100))
-    : 100;
+  const progressPercent =
+    next && next.pointsRequired > 0
+      ? Math.min(100, Math.round((points / next.pointsRequired) * 100))
+      : 100;
 
   return (
     <div className="space-y-6">
@@ -181,13 +224,13 @@ export default function Referral() {
           <p className="text-text-muted text-xs mt-2">
             {next ? (
               <>
-                {data.points} / {next.pointsRequired} points —{' '}
+                {points} / {next.pointsRequired} points —{' '}
                 <span className="text-text-primary">{next.pointsRemaining} more</span> qualified
                 referral{next.pointsRemaining === 1 ? '' : 's'} to reach level {next.level} (
                 {asPercent(next.commissionRate)})
               </>
             ) : (
-              <>Maximum level reached — {data.points} points</>
+              <>Maximum level reached — {points} points</>
             )}
           </p>
         </div>
@@ -196,11 +239,11 @@ export default function Referral() {
       {/* ── Totals ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: 'Referrals', value: data.totals.referrals },
-          { label: 'Qualified', value: data.totals.qualified },
+          { label: 'Referrals', value: totals.referrals ?? 0 },
+          { label: 'Qualified', value: totals.qualified ?? 0 },
           {
             label: 'Commission earned',
-            value: `${data.totals.commissionEarned.toFixed(2)} VLT`,
+            value: `${toVlt(totals.commissionEarned)} VLT`,
           },
         ].map((stat) => (
           <div key={stat.label} className="bg-bg-panel border border-line-dusk rounded-lg p-4">
@@ -236,9 +279,9 @@ export default function Referral() {
           </li>
         </ul>
 
-        {data.config?.levels?.length ? (
+        {tiers.length > 0 ? (
           <div className="mt-5 grid grid-cols-2 sm:grid-cols-5 gap-2">
-            {data.config.levels.map((tier) => (
+            {tiers.map((tier) => (
               <div
                 key={tier.level}
                 className={
@@ -272,13 +315,13 @@ export default function Referral() {
           YOUR REFERRALS
         </h3>
 
-        {data.referrals.length === 0 ? (
+        {referrals.length === 0 ? (
           <p className="text-text-muted text-sm">
             No referrals yet. Share your link to get started.
           </p>
         ) : (
           <div className="space-y-2">
-            {data.referrals.map((referral, index) => (
+            {referrals.map((referral, index) => (
               <div
                 key={`${referral.email ?? 'anon'}-${index}`}
                 className="flex items-center justify-between gap-3 py-2 border-b border-line-dusk last:border-0"
@@ -293,7 +336,7 @@ export default function Referral() {
                 </div>
                 <div className="text-right shrink-0">
                   <p className="font-mono text-sm text-accent-watt">
-                    {referral.earned.toFixed(2)} VLT
+                    {toVlt(referral.earned)} VLT
                   </p>
                   <p
                     className={
@@ -314,7 +357,7 @@ export default function Referral() {
         <p className="text-text-muted text-xs text-center">
           You joined through an invite and received a{' '}
           <span className="text-accent-watt font-mono">
-            {data.joinedViaInvite.bonus.toFixed(2)} VLT
+            {toVlt(data.joinedViaInvite.bonus)} VLT
           </span>{' '}
           welcome bonus.
         </p>

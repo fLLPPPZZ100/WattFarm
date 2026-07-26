@@ -18,6 +18,7 @@ import ethCoinImg from '../../assets/coins/eth-coin.png';
 import solCoinImg from '../../assets/coins/sol-coin.png';
 import avatarImg from '../../assets/avatars/avatar-1.png';
 import PixelImage from '../ui/PixelImage.jsx';
+import ErrorBoundary from '../ui/ErrorBoundary.jsx';
 
 
 const NAV_LINKS = [
@@ -374,7 +375,15 @@ export default function AppShell() {
           {!isDashboard && (
             <main className="absolute inset-0 overflow-y-auto z-0">
               <div className="max-w-5xl mx-auto px-6 py-6">
-                <Outlet />
+                {/*
+                  Inside the shell, not around it, so a page that throws leaves
+                  the sidebar and balances intact and the player can navigate
+                  away. Keyed by path so moving to another page clears a previous
+                  page's error instead of latching it.
+                */}
+                <ErrorBoundary key={location.pathname}>
+                  <Outlet />
+                </ErrorBoundary>
               </div>
             </main>
           )}
