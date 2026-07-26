@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
-import { verifyAuth, verifyAuthStrict } from '../middleware/verifyAuth.js';
+import { verifyAuth, verifyAuthStrict, requireVerifiedEmail } from '../middleware/verifyAuth.js';
 import { configLimiter } from '../middleware/rateLimit.js';
+import { withUserLock, UserNotFoundError } from '../lib/userLock.js';
 import { moneyToNumber } from '../lib/money.js';
+import { validateAllocations } from '../services/allocationRules.js';
 
 const router = Router();
 
@@ -19,9 +21,16 @@ function safeParseDetails(raw, payoutId) {
   }
 }
 
-const VALID_NETWORKS = ['solar', 'wind', 'hydro'];
+/** Only the fields the client needs — `id` and `userId` are internal. */
+function serialiseAllocation(allocation) {
+  return {
+    network: allocation.network,
+    percentage: allocation.percentage,
+    updatedAt: allocation.updatedAt,
+  };
+}
 
-// GET /api/mining/allocations — get current user's mining allocations
+// GET /api/mining/allocations — current user's mining allocations
 router.get('/allocations', verifyAuth, async (req, res) => {
   try {
     const allocations = await prisma.miningAllocation.findMany({
@@ -29,86 +38,94 @@ router.get('/allocations', verifyAuth, async (req, res) => {
       orderBy: { network: 'asc' },
     });
 
-    res.json({ allocations });
+    res.json({ allocations: allocations.map(serialiseAllocation) });
   } catch (err) {
-    console.error('Mining allocations error:', err);
-    res.status(500).json({ error: 'Failed to fetch allocations' });
+    console.error('[mining/allocations] read failed:', err);
+    res.status(500).json({ error: 'Failed to fetch allocations', code: 'allocations/read-failed' });
   }
 });
 
-// POST /api/mining/allocations — set mining allocation percentages
-// Body: { allocations: [{ network, percentage }] }
-// Total must sum to 100
-router.post('/allocations', verifyAuthStrict, configLimiter, async (req, res) => {
-  try {
-    const { allocations } = req.body;
+/**
+ * POST /api/mining/allocations — replace the player's allocation split.
+ * Body: { allocations: [{ network, percentage }] }, summing to 100.
+ *
+ * ## Why this route is locked and gated
+ *
+ * The allocation split decides how much of a player's power is pointed at each
+ * network, and therefore how much VLT the payout cron awards them. It is an
+ * economy route, but it was the only mutating one that ran without
+ * `withUserLock` and without `requireVerifiedEmail` — purchases, minigame plays
+ * and layout writes all had both.
+ *
+ * ## Why upsert instead of delete-then-create
+ *
+ * The write used to be `deleteMany` followed by one `create` per entry. Inside a
+ * transaction but with no lock, two concurrent saves could interleave and leave
+ * duplicate rows for a network, and the payout cron pays each row it finds. The
+ * delete also discarded `id` and `createdAt` on every save, so a row's history
+ * was reset by an unrelated slider change.
+ *
+ * Upserting against the `(userId, network)` unique constraint is idempotent: a
+ * retried request produces the same state, and rows keep their identity.
+ * Networks the player left out are removed afterwards, inside the same
+ * transaction, so omitting a slider still means zero.
+ */
+router.post(
+  '/allocations',
+  verifyAuthStrict,
+  requireVerifiedEmail,
+  configLimiter,
+  async (req, res) => {
+    try {
+      const { problems, allocations } = validateAllocations(req.body?.allocations);
 
-    if (!Array.isArray(allocations) || allocations.length === 0) {
-      return res.status(400).json({ error: 'Allocations array is required' });
-    }
-
-    // Cap the array length before iterating: an oversized payload would
-    // otherwise create one database row per element inside a transaction.
-    if (allocations.length > VALID_NETWORKS.length) {
-      return res.status(400).json({ error: 'Too many allocations submitted' });
-    }
-
-    // Reject non-numeric percentages before arithmetic, otherwise a string or
-    // null coerces and the sum check passes with nonsense values.
-    for (const a of allocations) {
-      if (typeof a?.percentage !== 'number' || !Number.isFinite(a.percentage)) {
-        return res.status(400).json({ error: 'Each allocation needs a numeric percentage' });
+      if (problems.length > 0) {
+        return res.status(400).json({
+          // The first problem is the message, so a client that only renders
+          // `error` still shows something specific rather than a generic
+          // "invalid request".
+          error: problems[0],
+          code: 'allocations/invalid',
+          problems,
+        });
       }
-    }
 
-    // Reject duplicate networks — two entries for "solar" could otherwise sum
-    // to 100 and silently overwrite each other.
-    const networks = allocations.map((a) => a.network);
-    if (new Set(networks).size !== networks.length) {
-      return res.status(400).json({ error: 'Duplicate networks are not allowed' });
-    }
+      const submittedNetworks = allocations.map((a) => a.network);
 
-    // Validate networks and total
-    const total = allocations.reduce((sum, a) => sum + a.percentage, 0);
-    if (Math.abs(total - 100) > 0.01) {
-      return res.status(400).json({ error: 'Allocation percentages must sum to 100' });
-    }
+      const stored = await withUserLock(req.uid, async (tx) => {
+        for (const { network, percentage } of allocations) {
+          await tx.miningAllocation.upsert({
+            where: { userId_network: { userId: req.uid, network } },
+            update: { percentage },
+            create: { userId: req.uid, network, percentage },
+          });
+        }
 
-    for (const a of allocations) {
-      if (!VALID_NETWORKS.includes(a.network)) {
-        return res.status(400).json({ error: `Invalid network: ${a.network}` });
+        // A network the player zeroed out is absent from the payload (the UI
+        // filters those), so it has to be deleted rather than set to 0 —
+        // otherwise an old value would keep earning.
+        await tx.miningAllocation.deleteMany({
+          where: { userId: req.uid, network: { notIn: submittedNetworks } },
+        });
+
+        return tx.miningAllocation.findMany({
+          where: { userId: req.uid },
+          orderBy: { network: 'asc' },
+        });
+      });
+
+      return res.json({ allocations: stored.map(serialiseAllocation) });
+    } catch (err) {
+      if (err instanceof UserNotFoundError) {
+        return res.status(404).json({ error: 'User not found', code: 'user/not-found' });
       }
-      if (a.percentage < 0 || a.percentage > 100) {
-        return res.status(400).json({ error: 'Percentage must be between 0 and 100' });
-      }
+      console.error('[mining/allocations] write failed:', err);
+      return res
+        .status(500)
+        .json({ error: 'Failed to update allocations', code: 'allocations/write-failed' });
     }
-
-    // Delete existing allocations for user, then create new ones
-    await prisma.$transaction([
-      prisma.miningAllocation.deleteMany({ where: { userId: req.uid } }),
-      ...allocations.map((a) =>
-        prisma.miningAllocation.create({
-          data: {
-            userId: req.uid,
-            network: a.network,
-            percentage: a.percentage,
-          },
-        })
-      ),
-    ]);
-
-    // Return updated allocations
-    const updated = await prisma.miningAllocation.findMany({
-      where: { userId: req.uid },
-      orderBy: { network: 'asc' },
-    });
-
-    res.json({ allocations: updated });
-  } catch (err) {
-    console.error('Set allocations error:', err);
-    res.status(500).json({ error: 'Failed to update allocations' });
   }
-});
+);
 
 // GET /api/mining/history — payout history for the current user
 router.get('/history', verifyAuth, async (req, res) => {
@@ -131,8 +148,8 @@ router.get('/history', verifyAuth, async (req, res) => {
 
     res.json({ payouts: formatted });
   } catch (err) {
-    console.error('Payout history error:', err);
-    res.status(500).json({ error: 'Failed to fetch payout history' });
+    console.error('[mining/history] read failed:', err);
+    res.status(500).json({ error: 'Failed to fetch payout history', code: 'history/read-failed' });
   }
 });
 

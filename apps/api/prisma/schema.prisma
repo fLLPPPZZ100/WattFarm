@@ -92,6 +92,14 @@ model MiningAllocation {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   user       User     @relation(fields: [userId], references: [id])
+
+  // One row per player per network. "No duplicate networks" used to be enforced
+  // only by a check in the route, while the write itself was a delete-then-
+  // create of every row — so two concurrent saves could interleave and leave a
+  // player with two rows for the same network, each paying out separately every
+  // cycle. The constraint makes that unrepresentable and lets the write be an
+  // upsert instead.
+  @@unique([userId, network])
 }
 
 model PlayerPayout {
