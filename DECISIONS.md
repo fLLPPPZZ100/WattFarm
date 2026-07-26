@@ -50,6 +50,26 @@
 - Distributed proportionally based on: player's effective W × allocation %
 - W is calculated via the same `wCalculator.js` used for display
 
+## Database migrations
+`prisma db push` is not used on anything that will be deployed. It was, and the
+migration history silently fell behind `schema.prisma`: `PlacedMount` and
+`LedgerEntry` existed only in the schema, the money columns were still
+`DOUBLE PRECISION`, `User.email` was still NOT NULL, and two declared indexes
+were never created. So any database built from migrations was missing the whole
+placement feature, and `lib/money.js` was doing exact arithmetic and then
+handing the result to a float column. Local development looked fine throughout,
+because it ran against a `db push` database.
+
+Rules:
+- Schema changes go through `npm run prisma:migrate` (`migrate dev`), which
+  writes a migration file. Deployments use `npm run prisma:deploy`.
+- `npm run prisma:drift` replays the full migration history into a shadow
+  database and diffs it against `schema.prisma`. It exits non-zero when they
+  disagree, so it belongs in CI. Requires `SHADOW_DATABASE_URL`.
+- Money columns are `Decimal(18,4)`. Ratios and physical rates
+  (`multiplier`, `baseW`, `percentage`) stay `Float` on purpose — they carry no
+  exactness guarantee.
+
 ## Auth flow
 - Firebase Auth handles identity (email/password + Google)
 - `POST /api/auth/sync` upserts user into Postgres on every auth state change
