@@ -25,6 +25,7 @@ const NAV_LINKS = [
   { to: '/shop', label: 'Shop', icon: '🛒' },
   { to: '/minigames', label: 'Minigames', icon: '🎮' },
   { to: '/wallet', label: 'Wallet', icon: '💰' },
+  { to: '/referral', label: 'Referral', icon: '👥' },
   { to: '/storage', label: 'Storage', icon: '📦' },
 ];
 

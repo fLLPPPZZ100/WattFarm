@@ -24,6 +24,65 @@ model User {
   payouts         PlayerPayout[]
   ledger          LedgerEntry[]
   placedMounts    PlacedMount[]
+
+  /// Code this player shares to invite others. Generated lazily on first sync
+  /// (nullable so existing rows migrate without a backfill).
+  referralCode        String?          @unique
+  /// Who invited this player.
+  ///
+  /// Written once, during account creation, and never afterwards. Two reasons:
+  /// reassigning it would let an established account be re-pointed at a new
+  /// referrer to farm commissions, and because it can only be set at creation
+  /// a referral cycle is structurally impossible — the referrer already existed
+  /// when this row was made, so it cannot in turn be referred by this row.
+  referredById        String?
+  referredBy          User?            @relation("Referrals", fields: [referredById], references: [id])
+  referrals           User[]           @relation("Referrals")
+  /// One point per referral that has reached the qualifying milestone. Drives
+  /// the referrer's level, which sets their commission rate.
+  referralPoints      Int              @default(0)
+  /// When this player qualified as somebody's referral. Null means their
+  /// referrer earns nothing from them yet. Set once, so points are awarded once.
+  referralQualifiedAt DateTime?
+
+  referralEarned      ReferralReward[] @relation("ReferrerRewards")
+  referralGenerated   ReferralReward[] @relation("ReferredRewards")
+
+  @@index([referredById])
+}
+
+/// A referral payout, in VLT.
+///
+/// Both directions of the programme live here: the commission paid to a
+/// referrer, and the one-off bonus paid to the person who joined. `beneficiary`
+/// says which, because `amount` alone cannot distinguish them.
+///
+/// `(sourceKind, sourceId)` is unique so one mining payout can only ever produce
+/// one commission. Idempotency is enforced by the database rather than by
+/// application logic, because the payout cycle can be re-run manually and a
+/// careful `findFirst` check would still race under concurrency.
+model ReferralReward {
+  id          String   @id @default(uuid())
+  referrerId  String
+  referredId  String
+  /// "referrer" (commission) | "referred" (signup bonus)
+  beneficiary String
+  amount      Decimal  @db.Decimal(18, 4)
+  /// Rate applied at the time, recorded so history stays explainable after the
+  /// referrer levels up and their rate changes. Zero for the signup bonus.
+  rateApplied Decimal  @default(0) @db.Decimal(6, 4)
+  /// "mining-payout" | "signup-bonus"
+  sourceKind  String
+  /// The PlayerPayout id for a commission, the new user's id for a bonus.
+  sourceId    String?
+  createdAt   DateTime @default(now())
+
+  referrer    User     @relation("ReferrerRewards", fields: [referrerId], references: [id])
+  referred    User     @relation("ReferredRewards", fields: [referredId], references: [id])
+
+  @@unique([sourceKind, sourceId])
+  @@index([referrerId, createdAt])
+  @@index([referredId, createdAt])
 }
 
 model AssetCatalog {

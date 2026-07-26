@@ -13,6 +13,7 @@ import assetsRoutes from './routes/assets.js';
 import farmRoutes from './routes/farm.js';
 import minigamesRoutes from './routes/minigames.js';
 import miningRoutes from './routes/mining.js';
+import referralRoutes from './routes/referral.js';
 import usersRoutes from './routes/users.js';
 import { startMiningPayoutCron } from './services/miningPayout.js';
 
@@ -101,6 +102,7 @@ app.use('/api/assets', assetsRoutes);
 app.use('/api/farm', farmRoutes);
 app.use('/api/minigames', minigamesRoutes);
 app.use('/api/mining', miningRoutes);
+app.use('/api/referral', referralRoutes);
 app.use('/api/users', usersRoutes);
 
 /* ── 404 ── */

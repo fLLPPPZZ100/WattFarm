@@ -135,6 +135,20 @@ export const minigameLimiter = makeLimiter({
   message: 'Too many minigame attempts. Please wait a moment.',
 });
 
+/**
+ * Referral code lookups.
+ *
+ * Unauthenticated, because the signup form validates a code before the account
+ * exists — so this one is keyed by IP in practice. A code is 8 Crockford base32
+ * characters (2^40 combinations), which is far too sparse to enumerate over HTTP
+ * regardless, but a limit keeps the endpoint from being a free oracle.
+ */
+export const referralLookupLimiter = makeLimiter({
+  windowMs: 60 * 1000,
+  limit: 20,
+  message: 'Too many referral code checks. Please wait a moment.',
+});
+
 /** Writes to mining allocation config — replaces all rows in a transaction. */
 export const configLimiter = makeLimiter({
   windowMs: 60 * 1000,

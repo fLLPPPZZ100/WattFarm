@@ -24,6 +24,7 @@ import {
 
 import { auth, googleProvider, persistenceReady } from '../firebase.js';
 import { api, ApiError, onSessionExpired } from '../lib/apiClient.js';
+import { clearStoredReferralCode, getStoredReferralCode } from '../lib/referral.js';
 
 const AuthContext = createContext(null);
 
@@ -78,6 +79,12 @@ export function AuthProvider({ children }) {
   const [account, setAccount] = useState(null); // backend row (balance, avatars…)
   const [status, setStatus] = useState(SessionStatus.INITIALISING);
   const [provisionError, setProvisionError] = useState(null);
+  /**
+   * Result of applying an invite code during this session's first sync, so the
+   * UI can confirm the bonus was granted — or explain why the code was refused
+   * — instead of the player pasting a code and seeing nothing happen.
+   */
+  const [referralOutcome, setReferralOutcome] = useState(null);
 
   /**
    * Firebase mutates its `User` object in place, so `setUser(sameUser)` is a
@@ -107,12 +114,29 @@ export function AuthProvider({ children }) {
   const provision = useCallback(
     async (firebaseUser, generation, attempt = 0) => {
       try {
-        const data = await api.post('/api/auth/sync');
+        /**
+         * A pending invite code rides along with the sync. The server applies it
+         * only when it creates the account row, so sending it on a later sync is
+         * harmless — it is simply ignored.
+         */
+        const referralCode = getStoredReferralCode();
+        const data = await api.post(
+          '/api/auth/sync',
+          referralCode ? { referralCode } : undefined
+        );
+
+        /**
+         * Spent either way: the code can only ever apply at account creation, so
+         * once a sync has succeeded there is no future request it could help.
+         * Clearing only on success keeps it available for the retry path.
+         */
+        if (referralCode) clearStoredReferralCode();
 
         // A newer auth event superseded this one — discard the result.
         if (generation !== syncGenerationRef.current) return;
 
         setAccount(data.user ?? null);
+        setReferralOutcome(data.referral ?? null);
         setProvisionError(null);
         setStatus(SessionStatus.READY);
       } catch (err) {
@@ -150,6 +174,9 @@ export function AuthProvider({ children }) {
     },
     []
   );
+
+  /** Dismisses the invite-code notice once the player has seen it. */
+  const dismissReferralOutcome = useCallback(() => setReferralOutcome(null), []);
 
   /** Lets the UI offer a "try again" button when provisioning failed. */
   const retryProvisioning = useCallback(() => {
@@ -195,6 +222,7 @@ export function AuthProvider({ children }) {
         if (!firebaseUser) {
           setUser(null);
           setAccount(null);
+          setReferralOutcome(null);
           setProvisionError(null);
           setStatus(SessionStatus.SIGNED_OUT);
           return;
@@ -352,6 +380,8 @@ export function AuthProvider({ children }) {
       account,
       status,
       provisionError,
+      referralOutcome,
+      dismissReferralOutcome,
 
       // Derived flags — these are what components should branch on.
       initialising: status === SessionStatus.INITIALISING,
@@ -380,6 +410,8 @@ export function AuthProvider({ children }) {
       account,
       status,
       provisionError,
+      referralOutcome,
+      dismissReferralOutcome,
       loginWithEmail,
       registerWithEmail,
       loginWithGoogle,

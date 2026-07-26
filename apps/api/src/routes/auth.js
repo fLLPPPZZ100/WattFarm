@@ -3,7 +3,9 @@ import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { verifyAuth } from '../middleware/verifyAuth.js';
 import { authSyncLimiter } from '../middleware/rateLimit.js';
-import { moneyToNumber } from '../lib/money.js';
+import { moneyToNumber, roundMoney } from '../lib/money.js';
+import { SIGNUP_BONUS_VLT } from '../config/referral.js';
+import { ensureReferralCode, recordSignupBonus, resolveReferrer } from '../services/referral.js';
 
 const router = Router();
 
@@ -34,7 +36,59 @@ function serialiseUser(user) {
     avatarId: user.avatarId,
     unlockedAvatars: user.unlockedAvatars,
     createdAt: user.createdAt,
+    referralCode: user.referralCode ?? null,
   };
+}
+
+/**
+ * Creates the account row, applying a referral if one came with the request.
+ *
+ * This is the *only* place `referredById` is ever written. Attribution has to
+ * happen here, at creation, because it must not be changeable later: an account
+ * that could be re-pointed at a new referrer would let someone build up a farm
+ * and then sell its earnings history to the highest bidder. Confining the write
+ * to creation also makes referral cycles impossible without a cycle check — the
+ * referrer already exists, so it cannot be downstream of this row.
+ *
+ * Balance and audit row are written in one transaction, so a crash cannot leave
+ * a bonus credited with no record of why.
+ */
+async function createAccount({ uid, email, rawReferralCode }) {
+  return prisma.$transaction(async (tx) => {
+    const { referrerId, reason } = await resolveReferrer({
+      newUserId: uid,
+      rawCode: rawReferralCode,
+      client: tx,
+    });
+
+    // The joining bonus goes to the person joining, not the referrer. That
+    // asymmetry is deliberate — see config/referral.js.
+    const bonus = referrerId ? SIGNUP_BONUS_VLT : 0;
+
+    const user = await tx.user.create({
+      data: {
+        id: uid,
+        // Explicit null (not '') — the column is uniquely indexed, and Postgres
+        // permits many NULLs but only one ''. The old default collided as soon
+        // as a second account without an email was created.
+        email: email ?? null,
+        // Only applied on create, so this is not a repeatable payout.
+        vltBalance: roundMoney(STARTING_VLT + bonus),
+        referredById: referrerId,
+      },
+    });
+
+    if (referrerId) {
+      await recordSignupBonus(tx, { referrerId, referredId: uid });
+    }
+
+    return {
+      user,
+      referral: referrerId
+        ? { applied: true, bonus }
+        : { applied: false, reason },
+    };
+  });
 }
 
 /**
@@ -47,33 +101,61 @@ function serialiseUser(user) {
  */
 router.post('/sync', verifyAuth, authSyncLimiter, async (req, res) => {
   const { uid, email, emailVerified } = req.auth;
+  const rawReferralCode = req.body?.referralCode;
 
   try {
-    const user = await prisma.user.upsert({
-      where: { id: uid },
+    /**
+     * Read-then-create rather than `upsert`, because the referral has to be
+     * applied only to a brand-new row and `upsert` cannot tell the caller
+     * whether it inserted or updated. The concurrent-sync race this opens is
+     * handled by the P2002-on-id branch below.
+     */
+    let user = await prisma.user.findUnique({ where: { id: uid } });
+    let referral = null;
+
+    if (!user) {
+      const created = await createAccount({ uid, email, rawReferralCode });
+      user = created.user;
+      referral = created.referral;
+    } else if (email && user.email !== email) {
       // Only write the email when Firebase actually provided one, so a
       // provider that omits it cannot blank out a previously known address.
-      update: email ? { email } : {},
-      create: {
-        id: uid,
-        // Explicit null (not '') — the column is uniquely indexed, and Postgres
-        // permits many NULLs but only one ''. The old default collided as soon
-        // as a second account without an email was created.
-        email: email ?? null,
-        // Only applied on create, so this is not a repeatable payout.
-        vltBalance: STARTING_VLT,
-      },
-    });
+      user = await prisma.user.update({ where: { id: uid }, data: { email } });
+    }
+
+    // Issued lazily so accounts created before the programme existed get a code
+    // the first time they sign in, with no data migration.
+    if (!user.referralCode) {
+      user = { ...user, referralCode: await ensureReferralCode(uid) };
+    }
 
     return res.json({
       user: serialiseUser(user),
       emailVerified,
+      // Lets the client confirm an invite was honoured, or explain why it was
+      // not, instead of silently dropping a code the player pasted.
+      referral,
     });
   } catch (err) {
-    // Unique constraint violation: the address already belongs to a different
-    // uid. This happens when someone registers with a password and later signs
-    // in with Google (or vice versa) and Firebase issues a distinct uid.
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      const target = Array.isArray(err.meta?.target) ? err.meta.target : [];
+
+      /**
+       * Two syncs for the same uid arrived together and both saw no row. The
+       * loser simply reads the winner's row: the account exists, which is all
+       * the caller asked for. The referral is not retried — the winning
+       * transaction already decided it.
+       */
+      if (target.includes('id')) {
+        const existing = await prisma.user.findUnique({ where: { id: uid } });
+        if (existing) {
+          return res.json({ user: serialiseUser(existing), emailVerified, referral: null });
+        }
+      }
+
+      // Unique constraint on email: the address already belongs to a different
+      // uid. This happens when someone registers with a password and later signs
+      // in with Google (or vice versa) and Firebase issues a distinct uid.
       console.warn(`[auth/sync] email collision for uid=${uid}`);
       return res.status(409).json({
         error:

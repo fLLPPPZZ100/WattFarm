@@ -9,6 +9,7 @@
     "prisma:migrate": "npx prisma migrate dev",
     "prisma:studio": "npx prisma studio",
     "test:concurrency": "node scripts/test-concurrency.mjs",
+    "test:referral": "node scripts/test-referral.mjs",
     "payout:run": "node scripts/run-payout.mjs"
   },
   "dependencies": {
