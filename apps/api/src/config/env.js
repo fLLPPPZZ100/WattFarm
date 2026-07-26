@@ -85,18 +85,55 @@ if (credentialSources.length === 0) {
   );
 }
 
+/* ── Proxy trust ── */
+/**
+ * Number of reverse proxies in front of the API.
+ *
+ * This directly controls whether `req.ip` can be forged. Express derives the
+ * client address from `X-Forwarded-For` when proxies are trusted, and a client
+ * can put anything in that header. A previous revision hard-coded a value of 1,
+ * which meant that running the API without a proxy in front of it (local
+ * development, or a direct deployment) let anyone reset their own rate-limit
+ * counter by rotating the header.
+ *
+ * 0 — trust nobody; use the socket address. Correct when the API is exposed
+ *     directly. This is the default.
+ * n — trust exactly n hops. Set this to match the hosting platform
+ *     (Railway/Render/Fly typically terminate TLS at one proxy, so n = 1).
+ */
+const rawTrustProxy = process.env.TRUST_PROXY_HOPS ?? '0';
+const TRUST_PROXY_HOPS = Number.parseInt(rawTrustProxy, 10);
+if (!Number.isInteger(TRUST_PROXY_HOPS) || TRUST_PROXY_HOPS < 0 || TRUST_PROXY_HOPS > 10) {
+  problems.push(
+    `TRUST_PROXY_HOPS must be an integer between 0 and 10 (received "${rawTrustProxy}")`
+  );
+}
+
 /* ── Security toggles ── */
-// When true, every authenticated request asks Firebase whether the token was
-// revoked. Correct but adds a network round trip, so it is opt-in per route
-// via `verifyAuth.strict` rather than applied globally.
+// When true, state-changing routes ask Firebase whether the token was revoked.
+// Adds a network round trip, so it is applied per route via verifyAuthStrict
+// rather than globally.
 const CHECK_REVOKED_TOKENS = process.env.CHECK_REVOKED_TOKENS !== 'false';
 
-// Whether spending/earning routes demand a verified email address.
-// Defaults to enabled in production, disabled in development so local testing
-// does not require a working mail flow.
-const REQUIRE_VERIFIED_EMAIL = process.env.REQUIRE_VERIFIED_EMAIL
-  ? process.env.REQUIRE_VERIFIED_EMAIL === 'true'
-  : isProduction;
+/**
+ * Whether routes that earn or spend VLT demand a verified email address.
+ *
+ * Secure by default: enabled unless explicitly switched off. This previously
+ * defaulted to `isProduction`, which meant a deployment that forgot to set
+ * NODE_ENV silently ran with the check disabled. Security defaults should not
+ * depend on a variable that is easy to omit.
+ *
+ * Local development typically wants REQUIRE_VERIFIED_EMAIL=false.
+ */
+const REQUIRE_VERIFIED_EMAIL = process.env.REQUIRE_VERIFIED_EMAIL !== 'false';
+
+// Loudly flag the insecure combination rather than letting it pass unnoticed.
+if (isProduction && !REQUIRE_VERIFIED_EMAIL) {
+  console.warn(
+    '[config] WARNING: REQUIRE_VERIFIED_EMAIL=false in production. ' +
+      'Anyone can register with someone else’s address and move currency.'
+  );
+}
 
 /* ── Report and abort ── */
 if (problems.length > 0) {
@@ -123,6 +160,7 @@ export const env = Object.freeze({
   DATABASE_URL,
   PORT,
   CORS_ORIGINS,
+  TRUST_PROXY_HOPS,
   GOOGLE_APPLICATION_CREDENTIALS,
   FIREBASE_SERVICE_ACCOUNT_JSON,
   USE_APPLICATION_DEFAULT_CREDENTIALS,

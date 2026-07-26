@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { verifyAuth } from '../middleware/verifyAuth.js';
 import { authSyncLimiter } from '../middleware/rateLimit.js';
+import { moneyToNumber } from '../lib/money.js';
 
 const router = Router();
 
@@ -14,7 +15,9 @@ function serialiseUser(user) {
   return {
     id: user.id,
     email: user.email,
-    vltBalance: user.vltBalance,
+    // vltBalance is Decimal in the database; emit a JSON number so the
+    // frontend contract is unchanged. See lib/money.js.
+    vltBalance: moneyToNumber(user.vltBalance),
     avatarId: user.avatarId,
     unlockedAvatars: user.unlockedAvatars,
     createdAt: user.createdAt,
@@ -29,7 +32,7 @@ function serialiseUser(user) {
  * cannot buy, earn or spend anything, and silently continuing produced
  * confusing 404s on every later action.
  */
-router.post('/sync', authSyncLimiter, verifyAuth, async (req, res) => {
+router.post('/sync', verifyAuth, authSyncLimiter, async (req, res) => {
   const { uid, email, emailVerified } = req.auth;
 
   try {

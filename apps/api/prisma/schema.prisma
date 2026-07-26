@@ -13,7 +13,9 @@ model User {
   // Postgres allows many NULLs under a unique index but only one '', so the
   // previous non-null default collided on the second such account.
   email           String?            @unique
-  vltBalance      Float              @default(0)
+  // Decimal, not Float: binary floating point cannot represent decimal
+  // fractions exactly, so repeated credits/debits drifted. See lib/money.js.
+  vltBalance      Decimal            @default(0) @db.Decimal(18, 4)
   avatarId        String             @default("default")
   unlockedAvatars String[]           @default(["default"])
   createdAt       DateTime           @default(now())
@@ -21,13 +23,14 @@ model User {
   minigameLogs    MinigameSession[]
   miningAllocations MiningAllocation[]
   payouts         PlayerPayout[]
+  ledger          LedgerEntry[]
 }
 
 model AssetCatalog {
   type       String  @id // "solar" | "wind" | "hydro"
-  basePrice  Float
-  multiplier Float
-  baseW      Float
+  basePrice  Decimal @db.Decimal(18, 4) // currency — exact
+  multiplier Float // ratio, not currency
+  baseW      Float // watts per second, a physical rate
 }
 
 model PlayerAsset {
@@ -46,8 +49,12 @@ model MinigameSession {
   timestamp    DateTime @default(now())
   cooldownTier Int
   result       String   // "none" | "common" | "rare" | "epic"
-  vltEarned    Float
+  vltEarned    Decimal  @default(0) @db.Decimal(18, 4)
   user         User     @relation(fields: [userId], references: [id])
+
+  // Cooldown checks query by (userId, game) ordered by timestamp on every
+  // play and every status poll.
+  @@index([userId, game, timestamp])
 }
 
 model MiningAllocation {
@@ -63,8 +70,29 @@ model MiningAllocation {
 model PlayerPayout {
   id         String   @id @default(uuid())
   userId     String
-  amount     Float
+  amount     Decimal  @db.Decimal(18, 4)
   details    String   // JSON string with breakdown per network
   timestamp  DateTime @default(now())
   user       User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, timestamp])
+}
+
+/// Audit trail for currency-spending actions.
+///
+/// Purchases previously left no record, so an exploited balance could not be
+/// reconstructed after the fact. Minigames and payouts already had their own
+/// tables; this covers the debit side.
+model LedgerEntry {
+  id        String   @id @default(uuid())
+  userId    String
+  kind      String // "purchase" | "avatar-unlock"
+  amount    Decimal  @db.Decimal(18, 4) // always positive; `kind` implies direction
+  reference String? // asset type or avatar id
+  quantity  Int      @default(1)
+  balanceAfter Decimal @db.Decimal(18, 4)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
 }

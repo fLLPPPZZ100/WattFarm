@@ -18,11 +18,12 @@ import { startMiningPayoutCron } from './services/miningPayout.js';
 const app = express();
 
 /**
- * Hosting platforms (Railway, Fly, Render) terminate TLS at a proxy, so the
- * client IP arrives in X-Forwarded-For. Trusting exactly one hop lets the rate
- * limiter see real IPs without letting clients spoof the header themselves.
+ * Proxy trust governs whether `req.ip` — and therefore every IP-keyed rate
+ * limit — can be forged via `X-Forwarded-For`. It must describe the actual
+ * deployment, so it is configuration rather than a hard-coded guess.
+ * Defaults to trusting nobody. See TRUST_PROXY_HOPS in config/env.js.
  */
-app.set('trust proxy', 1);
+app.set('trust proxy', env.TRUST_PROXY_HOPS === 0 ? false : env.TRUST_PROXY_HOPS);
 
 // Do not advertise the framework.
 app.disable('x-powered-by');
@@ -151,6 +152,10 @@ async function start() {
     console.log(`[api] CORS allowlist: ${env.CORS_ORIGINS.join(', ') || '(none)'}`);
     console.log(
       `[api] email verification required for economy routes: ${env.REQUIRE_VERIFIED_EMAIL}`
+    );
+    console.log(
+      `[api] trusted proxy hops: ${env.TRUST_PROXY_HOPS}` +
+        (env.TRUST_PROXY_HOPS === 0 ? ' (client IP taken from the socket)' : '')
     );
   });
 }

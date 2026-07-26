@@ -2,8 +2,22 @@ import { Router } from 'express';
 import prisma from '../lib/prisma.js';
 import { verifyAuth, verifyAuthStrict } from '../middleware/verifyAuth.js';
 import { configLimiter } from '../middleware/rateLimit.js';
+import { moneyToNumber } from '../lib/money.js';
 
 const router = Router();
+
+/**
+ * `details` is a JSON string column. A malformed value would otherwise throw
+ * inside the map and fail the whole history request, hiding every payout.
+ */
+function safeParseDetails(raw, payoutId) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    console.warn(`[mining/history] unparseable details for payout ${payoutId}`);
+    return {};
+  }
+}
 
 const VALID_NETWORKS = ['solar', 'wind', 'hydro'];
 
@@ -25,7 +39,7 @@ router.get('/allocations', verifyAuth, async (req, res) => {
 // POST /api/mining/allocations — set mining allocation percentages
 // Body: { allocations: [{ network, percentage }] }
 // Total must sum to 100
-router.post('/allocations', configLimiter, verifyAuthStrict, async (req, res) => {
+router.post('/allocations', verifyAuthStrict, configLimiter, async (req, res) => {
   try {
     const { allocations } = req.body;
 
@@ -107,8 +121,11 @@ router.get('/history', verifyAuth, async (req, res) => {
 
     const formatted = payouts.map((p) => ({
       id: p.id,
-      amount: p.amount,
-      details: JSON.parse(p.details),
+      // `amount` is Decimal in the database and would serialise as a JSON
+      // *string*, breaking `amount.toFixed(2)` on the wallet page. Convert at
+      // the boundary so the API keeps emitting numbers.
+      amount: moneyToNumber(p.amount),
+      details: safeParseDetails(p.details, p.id),
       timestamp: p.timestamp,
     }));
 

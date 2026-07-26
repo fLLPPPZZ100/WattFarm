@@ -446,7 +446,26 @@ export default class FarmScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Removes the pre-namespacing key.
+   *
+   * Layouts used to be stored under a single global `wattfarm_placement`, which
+   * every account on the browser shared. It is no longer read, but leaving it
+   * behind keeps one player's farm sitting in another's storage indefinitely.
+   */
+  discardLegacyPlacement() {
+    try {
+      if (localStorage.getItem('wattfarm_placement') !== null) {
+        localStorage.removeItem('wattfarm_placement');
+      }
+    } catch {
+      // Storage unavailable (private browsing) — nothing to clean up.
+    }
+  }
+
   restorePlacement() {
+    this.discardLegacyPlacement();
+
     const key = this.placementStorageKey();
     if (!key) return;
 

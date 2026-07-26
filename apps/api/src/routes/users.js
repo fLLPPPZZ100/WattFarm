@@ -2,121 +2,151 @@ import { Router } from 'express';
 import prisma from '../lib/prisma.js';
 import { verifyAuthStrict, requireVerifiedEmail } from '../middleware/verifyAuth.js';
 import { economyLimiter, configLimiter } from '../middleware/rateLimit.js';
+import { withUserLock, UserNotFoundError } from '../lib/userLock.js';
+import { money, moneyToNumber, canAfford } from '../lib/money.js';
 
 const router = Router();
 
-// POST /api/users/me/avatars/:avatarId/unlock
-// Validates the avatar exists, is vlt type, debits VLT, and adds to unlockedAvatars
+/**
+ * Server-side price list for purchasable avatars.
+ *
+ * The catalogue itself lives in the frontend, but prices are authoritative here
+ * so a client cannot name its own price. Ids absent from this map are not
+ * purchasable.
+ */
+const AVATAR_PRICES = {
+  'golden-engineer': 50,
+  'neon-technician': 100,
+  'void-keeper': 200,
+};
+
+/**
+ * POST /api/users/me/avatars/:avatarId/unlock
+ *
+ * Debits VLT and unlocks the avatar atomically under a row lock. Previously the
+ * ownership and balance checks ran outside the transaction, so two concurrent
+ * requests could both pass and both `push` the same id — charging twice and
+ * leaving a duplicated entry in `unlockedAvatars`.
+ */
 router.post(
   '/me/avatars/:avatarId/unlock',
-  economyLimiter,
   verifyAuthStrict,
   requireVerifiedEmail,
+  economyLimiter,
   async (req, res) => {
-  try {
-    const { avatarId } = req.params;
+    try {
+      const { avatarId } = req.params;
 
-    const user = await prisma.user.findUnique({ where: { id: req.uid } });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+      const price = AVATAR_PRICES[avatarId];
+      if (price === undefined) {
+        return res.status(400).json({ error: 'Invalid avatar or avatar is not purchasable' });
+      }
 
-    // Check if already unlocked
-    if (user.unlockedAvatars.includes(avatarId)) {
-      return res.status(400).json({ error: 'Avatar is already unlocked' });
-    }
+      const outcome = await withUserLock(req.uid, async (tx, user) => {
+        // Re-checked under the lock, so a concurrent unlock cannot slip past.
+        if (user.unlockedAvatars.includes(avatarId)) {
+          return { status: 400, body: { error: 'Avatar is already unlocked' } };
+        }
 
-    // Check if already active
-    if (user.avatarId === avatarId) {
-      return res.status(400).json({ error: 'Avatar is already your active avatar' });
-    }
+        if (!canAfford(user.vltBalance, price)) {
+          return {
+            status: 400,
+            body: {
+              error: 'Insufficient VLT balance',
+              required: price,
+              balance: moneyToNumber(user.vltBalance),
+            },
+          };
+        }
 
-    // Validate avatar exists in catalog
-    // Avatar catalog lives on the frontend, but we validate price server-side
-    const AVATAR_PRICES = {
-      'golden-engineer': 50,
-      'neon-technician': 100,
-      'void-keeper': 200,
-    };
+        const updated = await tx.user.update({
+          where: { id: req.uid },
+          data: {
+            vltBalance: { decrement: money(price) },
+            unlockedAvatars: { push: avatarId },
+            avatarId, // auto-equip after unlock
+          },
+        });
 
-    const price = AVATAR_PRICES[avatarId];
-    if (price === undefined) {
-      return res.status(400).json({ error: 'Invalid avatar or avatar is not purchasable' });
-    }
+        await tx.ledgerEntry.create({
+          data: {
+            userId: req.uid,
+            kind: 'avatar-unlock',
+            amount: money(price),
+            reference: avatarId,
+            quantity: 1,
+            balanceAfter: updated.vltBalance,
+          },
+        });
 
-    // Check VLT balance
-    if (user.vltBalance < price) {
-      return res.status(400).json({
-        error: 'Insufficient VLT balance',
-        required: price,
-        balance: user.vltBalance,
+        return {
+          status: 200,
+          body: {
+            success: true,
+            avatarId,
+            newBalance: moneyToNumber(updated.vltBalance),
+            unlockedAvatars: updated.unlockedAvatars,
+          },
+        };
       });
+
+      return res.status(outcome.status).json(outcome.body);
+    } catch (err) {
+      if (err instanceof UserNotFoundError) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      console.error('Avatar unlock error:', err);
+      return res.status(500).json({ error: 'Failed to unlock avatar' });
     }
-
-    // Atomic transaction: debit VLT + unlock avatar
-    const updatedUser = await prisma.$transaction(async (tx) => {
-      const u = await tx.user.update({
-        where: { id: req.uid },
-        data: {
-          vltBalance: { decrement: price },
-          unlockedAvatars: { push: avatarId },
-          avatarId: avatarId, // auto-equip after unlock
-        },
-      });
-      return u;
-    });
-
-    res.json({
-      success: true,
-      avatarId,
-      newBalance: updatedUser.vltBalance,
-      unlockedAvatars: updatedUser.unlockedAvatars,
-    });
-  } catch (err) {
-    console.error('Avatar unlock error:', err);
-    res.status(500).json({ error: 'Failed to unlock avatar' });
   }
-});
+);
 
-// PATCH /api/users/me/avatar
-// Receives { avatarId }, validates it's in unlockedAvatars, sets as active
-router.patch('/me/avatar', configLimiter, verifyAuthStrict, async (req, res) => {
+/**
+ * PATCH /api/users/me/avatar — set the active avatar.
+ * Body: { avatarId }
+ *
+ * No currency moves, but it still reads then writes, so it runs under the same
+ * lock to stay consistent with a concurrent unlock.
+ */
+router.patch('/me/avatar', verifyAuthStrict, configLimiter, async (req, res) => {
   try {
     const { avatarId } = req.body;
 
-    if (!avatarId) {
+    if (!avatarId || typeof avatarId !== 'string') {
       return res.status(400).json({ error: 'avatarId is required' });
     }
 
-    const user = await prisma.user.findUnique({ where: { id: req.uid } });
-    if (!user) {
+    const outcome = await withUserLock(req.uid, async (tx, user) => {
+      if (!user.unlockedAvatars.includes(avatarId)) {
+        return { status: 403, body: { error: 'You have not unlocked this avatar yet' } };
+      }
+
+      if (user.avatarId === avatarId) {
+        return { status: 400, body: { error: 'This avatar is already active' } };
+      }
+
+      const updated = await tx.user.update({
+        where: { id: req.uid },
+        data: { avatarId },
+      });
+
+      return {
+        status: 200,
+        body: {
+          success: true,
+          avatarId: updated.avatarId,
+          unlockedAvatars: updated.unlockedAvatars,
+        },
+      };
+    });
+
+    return res.status(outcome.status).json(outcome.body);
+  } catch (err) {
+    if (err instanceof UserNotFoundError) {
       return res.status(404).json({ error: 'User not found' });
     }
-
-    // Check if user owns this avatar
-    if (!user.unlockedAvatars.includes(avatarId)) {
-      return res.status(403).json({ error: 'You have not unlocked this avatar yet' });
-    }
-
-    // Check if already active
-    if (user.avatarId === avatarId) {
-      return res.status(400).json({ error: 'This avatar is already active' });
-    }
-
-    // Update active avatar
-    const updatedUser = await prisma.user.update({
-      where: { id: req.uid },
-      data: { avatarId },
-    });
-
-    res.json({
-      success: true,
-      avatarId: updatedUser.avatarId,
-      unlockedAvatars: updatedUser.unlockedAvatars,
-    });
-  } catch (err) {
     console.error('Set avatar error:', err);
-    res.status(500).json({ error: 'Failed to set avatar' });
+    return res.status(500).json({ error: 'Failed to set avatar' });
   }
 });
 
