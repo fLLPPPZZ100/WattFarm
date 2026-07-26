@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import prisma from '../lib/prisma.js';
 import { calculateAccumulatedW } from './wCalculator.js';
-import { roundMoney, moneyToNumber } from '../lib/money.js';
+import { roundMoney, moneyToNumber, isPositive } from '../lib/money.js';
 
 /**
  * Simulated mining payout: runs every 10 minutes.
@@ -91,7 +91,7 @@ export async function runPayoutCycle() {
       const payoutAmount = roundMoney(share);
 
       // Skip amounts that round to nothing rather than writing a zero payout.
-      if (payoutAmount.lessThanOrEqualTo(0)) continue;
+      if (!isPositive(payoutAmount)) continue;
 
       try {
         await prisma.$transaction(async (tx) => {

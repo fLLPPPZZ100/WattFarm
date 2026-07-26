@@ -91,9 +91,10 @@ function makeLimiter({ windowMs, limit, message }) {
     legacyHeaders: false,
     keyGenerator: keyByUserOrIp,
     handler: limitHandler(message),
-    // A custom keyGenerator intentionally bypasses the library's IP checks;
-    // normaliseIp covers the IPv6 case those checks warn about.
-    validate: { keyGeneratorIpFallback: false },
+    // No `validate` overrides: supplying a custom keyGenerator already opts out
+    // of the library's IP-format checks, and `normaliseIp` covers the IPv6 case
+    // those checks exist to warn about. Passing an unrecognised validation key
+    // here makes express-rate-limit throw at construction time.
   });
 }
 

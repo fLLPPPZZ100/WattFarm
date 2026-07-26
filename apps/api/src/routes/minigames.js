@@ -3,7 +3,7 @@ import prisma from '../lib/prisma.js';
 import { verifyAuth, verifyAuthStrict, requireVerifiedEmail } from '../middleware/verifyAuth.js';
 import { minigameLimiter } from '../middleware/rateLimit.js';
 import { withUserLock, UserNotFoundError } from '../lib/userLock.js';
-import { money, moneyToNumber } from '../lib/money.js';
+import { money, moneyToNumber, isPositive } from '../lib/money.js';
 import {
   getCooldownTier,
   getCooldownRemainingMs,
@@ -117,7 +117,7 @@ router.post(
         const tier = getCooldownTier(playCountToday);
         const reward = money(loot.vlt);
 
-        const updatedUser = reward.greaterThan(0)
+        const updatedUser = isPositive(reward)
           ? await tx.user.update({
               where: { id: req.uid },
               data: { vltBalance: { increment: reward } },

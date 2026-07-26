@@ -87,13 +87,21 @@ export function multiplyMoney(unitPrice, quantity) {
  */
 export function affordableUnits(balance, unitPrice) {
   const price = money(unitPrice);
-  if (price.lessThanOrEqualTo(0)) return 0;
+  // Short-form comparison aliases (lte/gte/gt) are used throughout because they
+  // are present in both decimal.js and decimal.js-light; the verbose spellings
+  // are not guaranteed across the variants Prisma may bundle.
+  if (price.lte(0)) return 0;
   return Math.floor(money(balance).div(price).toNumber());
 }
 
 /** True when `balance` covers `cost`. Explicit helper to avoid `<` on Decimals. */
 export function canAfford(balance, cost) {
-  return money(balance).greaterThanOrEqualTo(money(cost));
+  return money(balance).gte(money(cost));
+}
+
+/** True when the amount is strictly positive. */
+export function isPositive(value) {
+  return money(value).gt(0);
 }
 
 export { Prisma };
