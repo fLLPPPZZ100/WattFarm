@@ -44,6 +44,21 @@
 | rare | 0.30% | 25 |
 | epic | 0.05% | 100 |
 
+## Mining allocations
+`POST /api/mining/allocations` counts as an economy route, not a preferences
+route. It sets how much of a player's power each network receives, so it decides
+income just as directly as a purchase does — it therefore requires a verified
+email and runs under the same `withUserLock` row lock as purchases, minigame
+plays and layout writes. It was the only mutating economy route without either.
+
+One row per `(userId, network)` is enforced by a unique constraint, so the write
+is an upsert rather than a delete-then-create of every row. A network the player
+zeroes out is absent from the payload and gets deleted, inside the same
+transaction.
+
+Validation lives in `services/allocationRules.js`, free of Prisma and Express
+imports so `npm run test:allocations` can exercise it without a database.
+
 ## Mining payout
 - Cron runs every 10 minutes
 - Fictitious budget: 50 VLT per network (solar/wind/hydro)
