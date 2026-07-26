@@ -8,7 +8,8 @@
     "start": "node src/index.js",
     "prisma:migrate": "npx prisma migrate dev",
     "prisma:studio": "npx prisma studio",
-    "test:concurrency": "node scripts/test-concurrency.mjs"
+    "test:concurrency": "node scripts/test-concurrency.mjs",
+    "payout:run": "node scripts/run-payout.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.17.0",

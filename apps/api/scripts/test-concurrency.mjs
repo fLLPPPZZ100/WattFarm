@@ -405,7 +405,10 @@ async function main() {
     session = await signIn();
   } catch (err) {
     log(`\n${c.red}${err.message}${c.reset}`);
-    process.exit(1);
+    // Return rather than process.exit(): sockets from the failed request may
+    // still be closing, and forcing exit trips a libuv assertion on Windows.
+    process.exitCode = 1;
+    return;
   }
 
   info(`uid: ${session.localId}`);
@@ -416,7 +419,8 @@ async function main() {
     if (!health.ok) throw new Error(`HTTP ${health.status}`);
   } catch (err) {
     log(`\n${c.red}Could not reach ${API_URL}/health — is the API running? (${err.message})${c.reset}`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   if (!args['skip-buy']) await probePurchases(session.idToken);
@@ -431,10 +435,16 @@ async function main() {
   }
   log('');
 
-  process.exit(failures === 0 ? 0 : 1);
+  /**
+   * Sets the code and lets the event loop drain instead of calling
+   * `process.exit()`. Forcing exit while fetch's sockets are still closing
+   * aborts libuv mid-teardown, which on Windows surfaces as
+   * "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)".
+   */
+  process.exitCode = failures === 0 ? 0 : 1;
 }
 
 main().catch((err) => {
   log(`\n${c.red}Unexpected error: ${err.stack || err.message}${c.reset}`);
-  process.exit(1);
+  process.exitCode = 1;
 });
