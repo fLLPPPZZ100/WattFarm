@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/apiClient.js';
 import { friendlyAuthError } from '../lib/authErrors.js';
+import AvatarPicker from '../components/profile/AvatarPicker.jsx';
+import { getAvatarImage } from '../data/avatars.js';
 
 const NETWORK_NAMES = {
   solar: 'Solar',
@@ -10,7 +12,7 @@ const NETWORK_NAMES = {
 };
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, account, patchAccount } = useAuth();
   const [allocations, setAllocations] = useState({
     solar: 0,
     wind: 0,
@@ -53,6 +55,27 @@ export default function Profile() {
   };
 
   const total = allocations.solar + allocations.wind + allocations.hydro;
+
+  /**
+   * The avatar lives on the account row, which AuthContext caches, so writing it
+   * back there is what updates the header — the picker does not talk to the
+   * header directly. `account` can be briefly null while the session is being
+   * provisioned, hence the fallback.
+   */
+  const activeAvatarId = account?.avatarId || 'default';
+  const unlockedAvatars = account?.unlockedAvatars || [];
+
+  const handleAvatarChanged = (result) => {
+    if (!result?.avatarId) return;
+
+    patchAccount({
+      avatarId: result.avatarId,
+      // The unlock route also returns the debited balance; the select route
+      // does not, so only merge what actually came back.
+      ...(result.unlockedAvatars ? { unlockedAvatars: result.unlockedAvatars } : {}),
+      ...(typeof result.newBalance === 'number' ? { vltBalance: result.newBalance } : {}),
+    });
+  };
 
   const handleSave = async () => {
     if (Math.abs(total - 100) > 0.01) {
@@ -99,12 +122,45 @@ export default function Profile() {
         <h3 className="font-display text-sm text-text-primary tracking-wide mb-3">
           ACCOUNT
         </h3>
-        <p className="text-text-muted text-sm">
-          Email: <span className="text-text-primary">{user.email}</span>
+        <div className="flex items-center gap-4">
+          {/* Shows the equipped avatar at the size the header uses, so the
+              player can see what the choice below actually changes. */}
+          <div
+            className="shrink-0 rounded-lg overflow-hidden border border-line-dusk bg-bg-abyss"
+            style={{ width: '64px', height: '64px' }}
+          >
+            <img
+              src={getAvatarImage(activeAvatarId)}
+              alt=""
+              className="w-full h-full object-cover block"
+              style={{ imageRendering: 'pixelated' }}
+            />
+          </div>
+          <div className="min-w-0">
+            <p className="text-text-muted text-sm truncate">
+              Email: <span className="text-text-primary">{user.email}</span>
+            </p>
+            <p className="text-text-muted text-xs mt-1">
+              User ID: <span className="font-mono text-text-muted">{user.uid.slice(0, 8)}...</span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Avatar */}
+      <div className="bg-bg-panel border border-line-dusk rounded-lg p-6">
+        <h3 className="font-display text-sm text-text-primary tracking-wide mb-4">
+          AVATAR
+        </h3>
+        <p className="text-text-muted text-xs mb-6">
+          Choose your avatar. It is applied straight away and shows up in the
+          header.
         </p>
-        <p className="text-text-muted text-xs mt-1">
-          User ID: <span className="font-mono text-text-muted">{user.uid.slice(0, 8)}...</span>
-        </p>
+        <AvatarPicker
+          unlockedAvatars={unlockedAvatars}
+          activeAvatarId={activeAvatarId}
+          onAvatarChanged={handleAvatarChanged}
+        />
       </div>
 
       {/* Mining Allocation */}

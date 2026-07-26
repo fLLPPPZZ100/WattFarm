@@ -15,7 +15,7 @@ import btcCoinImg from '../../assets/coins/btc-coin.png';
 import trxCoinImg from '../../assets/coins/trx-coin.png';
 import ethCoinImg from '../../assets/coins/eth-coin.png';
 import solCoinImg from '../../assets/coins/sol-coin.png';
-import avatarImg from '../../assets/avatars/avatar-1.png';
+import { getAvatarImage } from '../../data/avatars.js';
 
 
 const NAV_LINKS = [
@@ -37,7 +37,7 @@ const CURRENCIES = [
 const CYCLE_SECONDS = 600; // 10 minutes
 
 export default function AppShell() {
-  const { user, logout } = useAuth();
+  const { user, account, logout } = useAuth();
   const { vltBalance, assets, fetchMining } = useAssetsStore();
   const { placedSolar, placedMount, powerRate, networkBaseline } = usePlacementStore();
   const [activeCurrency, setActiveCurrency] = useState('VLT');
@@ -52,6 +52,15 @@ export default function AppShell() {
   const navigate = useNavigate();
 
   var balances = { VLT: vltBalance, BTC: btcBalance, ETH: ethBalance, SOL: solBalance, TRX: trxBalance };
+
+  /**
+   * The header avatar used to be a hardcoded import of avatar-1.png, so picking
+   * a different one in the profile changed nothing here. It now follows the
+   * account row, which AuthContext caches and the picker writes back to.
+   * `getAvatarImage` falls back to the default for an unknown id, so a row
+   * pointing at an avatar this build no longer ships still renders.
+   */
+  var avatarImg = getAvatarImage(account?.avatarId);
   var active = CURRENCIES.find(function (c) { return c.id === activeCurrency; }) || CURRENCIES[0];
 
   /**
