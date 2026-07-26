@@ -27,7 +27,7 @@ export default function EmailVerificationBanner() {
     setFeedback(null);
     try {
       await resendVerificationEmail();
-      setFeedback({ tone: 'success', message: 'E-mail enviado. Confira sua caixa de entrada.' });
+      setFeedback({ tone: 'success', message: 'Email sent. Check your inbox.' });
     } catch (err) {
       setFeedback({ tone: 'error', message: friendlyAuthError(err) });
     } finally {
@@ -48,7 +48,7 @@ export default function EmailVerificationBanner() {
       if (!verified) {
         setFeedback({
           tone: 'error',
-          message: 'Ainda não confirmado. Clique no link do e-mail e tente de novo.',
+          message: 'Not confirmed yet. Click the link in the email and try again.',
         });
       }
       // When verified, `emailVerified` flips and the banner unmounts itself.
@@ -64,10 +64,10 @@ export default function EmailVerificationBanner() {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <p className="flex-1 text-[11px] leading-snug text-text-primary">
           <span className="font-display mr-2 text-[9px] uppercase tracking-widest text-accent-watt">
-            Verifique seu e-mail
+            Verify your email
           </span>
-          Confirme <span className="font-mono text-accent-watt">{user.email}</span> para comprar
-          itens e jogar os minigames.
+          Confirm <span className="font-mono text-accent-watt">{user.email}</span> to buy items and
+          play the minigames.
         </p>
 
         <div className="flex items-center gap-2">
@@ -80,7 +80,7 @@ export default function EmailVerificationBanner() {
                        hover:bg-accent-watt/15 disabled:opacity-50"
             style={{ borderRadius: 0 }}
           >
-            {busy === 'resend' ? 'Enviando' : 'Reenviar'}
+            {busy === 'resend' ? 'Sending' : 'Resend'}
           </button>
 
           <button
@@ -92,13 +92,13 @@ export default function EmailVerificationBanner() {
                        hover:border-accent-current/50 hover:text-accent-current disabled:opacity-50"
             style={{ borderRadius: 0 }}
           >
-            {busy === 'check' ? 'Checando' : 'Já confirmei'}
+            {busy === 'check' ? 'Checking' : "I've confirmed"}
           </button>
 
           <button
             type="button"
             onClick={() => setDismissed(true)}
-            aria-label="Ocultar aviso"
+            aria-label="Dismiss notice"
             className="pixel-focus px-1.5 text-text-muted transition-none hover:text-text-primary"
           >
             ✕

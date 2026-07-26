@@ -1,14 +1,33 @@
 # Design Decisions — WattFarm
 
+## Language
+English only, everywhere — copy, code, commits, docs. See
+`.kiro/steering/language.md` for the full rule and the reasoning.
+
 ## Routes
 | Route | Page | Notes |
 |---|---|---|
-| `/` | Dashboard | Overview: W counter, VLT balance, total assets, quick links |
-| `/my-assets` | My Assets | Farm view with pixel art sprites, buy catalog, W accumulation |
+| `/` | Farm | The game. Phaser canvas plus the power and payout panels |
+| `/shop` | Shop | Buy catalogue (`pages/MyAssets.jsx`) |
 | `/minigames` | Minigames | 3 game cards: Solar Swipe, Wind Clicker, Hydro Race |
 | `/wallet` | Wallet | Mining payout history + minigame activity summary |
-| `/profile` | Profile | User info + mining allocation sliders |
+| `/profile` | Profile | Account details, nickname, password, avatar picker |
+| `/storage` | Storage | Owned items not currently placed |
 | `/style-guide` | (removed in Phase 6) | Disposable test page for design tokens |
+
+Signing in always lands on `/`. The login page used to honour a `state.from`
+location so a deep link resumed after authenticating, but a session should start
+at the game rather than dropping the player into `/wallet` because that was the
+URL they happened to open.
+
+`/` was called Dashboard. Nothing about it is a dashboard — it is the farm — and
+the component (`pages/Farm.jsx`) renders nothing, because the Phaser canvas is
+mounted once by `AppShell` in `#phaser-root` and kept alive across navigation.
+
+The mining allocation sliders were removed from `/profile`. The component is
+preserved, unmounted, in `components/profile/MiningAllocationPanel.jsx`; the API
+routes are untouched. See that file for why it is parked and what the options
+are.
 
 ## Game IDs (minigames)
 - `solar-swipe` — Solar Swipe

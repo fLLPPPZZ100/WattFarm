@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
 import { friendlyAuthError, scorePassword } from '../lib/authErrors.js';
@@ -58,14 +58,6 @@ export default function Login() {
   } = useAuth();
 
   const navigate = useNavigate();
-  const location = useLocation();
-
-  /**
-   * Where to land after a successful login. RequireAuth stores the blocked
-   * location here, so a user who deep-linked to /wallet returns there instead
-   * of always being dumped on the dashboard.
-   */
-  const redirectTo = location.state?.from?.pathname || '/';
 
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [view, setView] = useState(View.CREDENTIALS);
@@ -90,12 +82,19 @@ export default function Login() {
   const isRegister = mode === 'register';
   const strength = useMemo(() => scorePassword(password), [password]);
 
-  /* Redirect once the session is fully ready. */
+  /**
+   * Redirect once the session is fully ready.
+   *
+   * Always to the farm. This previously honoured a `state.from` location handed
+   * over by RequireAuth, so a deep link resumed after signing in — but a session
+   * should start at the game view rather than dropping the player into /wallet
+   * or /storage because that was the URL they happened to open.
+   */
   useEffect(() => {
     if (isAuthenticated) {
-      navigate(redirectTo, { replace: true });
+      navigate('/', { replace: true });
     }
-  }, [isAuthenticated, navigate, redirectTo]);
+  }, [isAuthenticated, navigate]);
 
   /* Focus the first field on mount and whenever the view changes. */
   useEffect(() => {
@@ -130,12 +129,12 @@ export default function Login() {
   const validate = useCallback(() => {
     const errors = {};
 
-    if (!email.trim()) errors.email = 'Informe seu e-mail.';
-    else if (!looksLikeEmail(email)) errors.email = 'Endereço de e-mail inválido.';
+    if (!email.trim()) errors.email = 'Enter your email.';
+    else if (!looksLikeEmail(email)) errors.email = 'Invalid email address.';
 
-    if (!password) errors.password = 'Informe sua senha.';
+    if (!password) errors.password = 'Enter your password.';
     else if (isRegister && password.length < MIN_PASSWORD_LENGTH) {
-      errors.password = `Use pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`;
+      errors.password = `Use at least ${MIN_PASSWORD_LENGTH} characters.`;
     }
 
     setFieldErrors(errors);
@@ -192,7 +191,7 @@ export default function Login() {
     resetFeedback();
 
     if (!looksLikeEmail(email)) {
-      setFieldErrors({ email: 'Informe um e-mail válido para receber o link.' });
+      setFieldErrors({ email: 'Enter a valid email to receive the link.' });
       return;
     }
 
@@ -229,7 +228,7 @@ export default function Login() {
    */
   if (initialising || isProvisioning) {
     return (
-      <SessionLoading label={isProvisioning ? 'Sincronizando' : 'Iniciando'} />
+      <SessionLoading label={isProvisioning ? 'Syncing' : 'Starting'} />
     );
   }
 
@@ -270,12 +269,12 @@ export default function Login() {
             {view === View.FORGOT_SENT && (
               <>
                 <PixelHeading id="auth-title" className="mb-4">
-                  Link enviado
+                  Link sent
                 </PixelHeading>
 
                 <PixelAlert tone="success" className="mb-5">
-                  Se existir uma conta para <strong className="font-mono">{email.trim()}</strong>,
-                  o link de redefinição chegará em instantes. Confira também a caixa de spam.
+                  If an account exists for <strong className="font-mono">{email.trim()}</strong>,
+                  the reset link will arrive shortly. Check your spam folder too.
                 </PixelAlert>
 
                 <PixelButton
@@ -287,7 +286,7 @@ export default function Login() {
                   }}
                 >
                   <ArrowLeftIcon />
-                  Voltar ao login
+                  Back to sign in
                 </PixelButton>
               </>
             )}
@@ -296,10 +295,10 @@ export default function Login() {
             {view === View.FORGOT && (
               <>
                 <PixelHeading id="auth-title" className="mb-2">
-                  Recuperar senha
+                  Reset password
                 </PixelHeading>
                 <p className="mb-5 text-[11px] leading-relaxed text-text-muted">
-                  Informe o e-mail da sua conta e enviaremos um link para criar uma nova senha.
+                  Enter your account email and we will send a link to create a new password.
                 </p>
 
                 {formError && (
@@ -311,13 +310,13 @@ export default function Login() {
                 <form onSubmit={handleReset} noValidate>
                   <PixelField
                     ref={emailRef}
-                    label="E-mail"
+                    label="Email"
                     icon={MailIcon}
                     type="email"
                     name="email"
                     autoComplete="email"
                     spellCheck="false"
-                    placeholder="voce@exemplo.com"
+                    placeholder="you@example.com"
                     value={email}
                     error={fieldErrors.email}
                     onChange={(e) => {
@@ -332,7 +331,7 @@ export default function Login() {
                     loading={busy === 'reset'}
                     disabled={busy !== null}
                   >
-                    {busy === 'reset' ? 'Enviando' : 'Enviar link'}
+                    {busy === 'reset' ? 'Sending' : 'Send link'}
                   </PixelButton>
                 </form>
 
@@ -346,7 +345,7 @@ export default function Login() {
                              text-[11px] text-text-muted transition-none hover:text-accent-watt"
                 >
                   <ArrowLeftIcon className="h-3 w-3" />
-                  Voltar ao login
+                  Back to sign in
                 </button>
               </>
             )}
@@ -358,18 +357,18 @@ export default function Login() {
                   value={mode}
                   onChange={handleModeChange}
                   options={[
-                    { value: 'login', label: 'Entrar' },
-                    { value: 'register', label: 'Criar conta' },
+                    { value: 'login', label: 'Sign in' },
+                    { value: 'register', label: 'Create account' },
                   ]}
                 />
 
                 <PixelHeading id="auth-title" className="mb-1.5">
-                  {isRegister ? 'Nova conta' : 'Bem-vindo'}
+                  {isRegister ? 'New account' : 'Welcome'}
                 </PixelHeading>
                 <p className="mb-5 text-[11px] leading-relaxed text-text-muted">
                   {isRegister
-                    ? 'Monte sua usina solar, gere watts e acumule VLT.'
-                    : 'Entre para continuar administrando sua fazenda solar.'}
+                    ? 'Build your solar plant, generate watts and stack up VLT.'
+                    : 'Sign in to keep running your solar farm.'}
                 </p>
 
                 {formError && (
@@ -381,12 +380,12 @@ export default function Login() {
                 <form onSubmit={handleSubmit} noValidate className="space-y-4">
                   {isRegister && (
                     <PixelField
-                      label="Apelido (opcional)"
+                      label="Nickname (optional)"
                       icon={UserIcon}
                       name="displayName"
                       autoComplete="nickname"
                       maxLength={24}
-                      placeholder="EngenheiroSolar"
+                      placeholder="SolarEngineer"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                     />
@@ -394,13 +393,13 @@ export default function Login() {
 
                   <PixelField
                     ref={emailRef}
-                    label="E-mail"
+                    label="Email"
                     icon={MailIcon}
                     type="email"
                     name="email"
                     autoComplete="email"
                     spellCheck="false"
-                    placeholder="voce@exemplo.com"
+                    placeholder="you@example.com"
                     value={email}
                     error={fieldErrors.email}
                     onChange={(e) => {
@@ -413,7 +412,7 @@ export default function Login() {
 
                   <div>
                     <PixelField
-                      label="Senha"
+                      label="Password"
                       icon={LockIcon}
                       revealable
                       name="password"
@@ -423,7 +422,7 @@ export default function Login() {
                       error={fieldErrors.password}
                       hint={
                         isRegister && !fieldErrors.password
-                          ? `Mínimo de ${MIN_PASSWORD_LENGTH} caracteres.`
+                          ? `At least ${MIN_PASSWORD_LENGTH} characters.`
                           : undefined
                       }
                       onChange={(e) => {
@@ -452,7 +451,7 @@ export default function Login() {
                         className="pixel-focus mt-2 text-[11px] text-text-muted transition-none
                                    hover:text-accent-watt hover:underline"
                       >
-                        Esqueci minha senha
+                        Forgot my password
                       </button>
                     )}
                   </div>
@@ -464,14 +463,14 @@ export default function Login() {
                     disabled={busy !== null}
                   >
                     {busy === 'email'
-                      ? 'Conectando'
+                      ? 'Connecting'
                       : isRegister
-                        ? 'Criar conta'
-                        : 'Entrar'}
+                        ? 'Create account'
+                        : 'Sign in'}
                   </PixelButton>
                 </form>
 
-                <PixelDivider>ou</PixelDivider>
+                <PixelDivider>or</PixelDivider>
 
                 <PixelButton
                   variant="ghost"
@@ -481,7 +480,7 @@ export default function Login() {
                   disabled={busy !== null}
                 >
                   {busy !== 'google' && <GoogleIcon />}
-                  Continuar com Google
+                  Continue with Google
                 </PixelButton>
 
                 {/* Reward teaser — reinforces the idle-game premise */}
@@ -497,8 +496,8 @@ export default function Login() {
                     }}
                   />
                   <p className="text-[11px] leading-snug text-text-muted">
-                    Ganhe <span className="font-mono text-accent-watt">VLT</span> a cada ciclo de
-                    pagamento, mesmo offline.
+                    Earn <span className="font-mono text-accent-watt">VLT</span> every payout
+                    cycle, even while offline.
                   </p>
                 </div>
 
@@ -506,8 +505,8 @@ export default function Login() {
                   <p className="mt-4 flex items-start gap-1.5 text-[10px] leading-relaxed text-text-muted">
                     <CheckIcon className="mt-0.5 h-3 w-3 shrink-0 text-accent-current" />
                     <span>
-                      Enviaremos um e-mail de verificação. Você precisa confirmá-lo para comprar
-                      itens e jogar os minigames.
+                      We will send a verification email. You need to confirm it to buy items and
+                      play the minigames.
                     </span>
                   </p>
                 )}
@@ -519,7 +518,7 @@ export default function Login() {
         {/* Footer */}
         <p className="mt-5 text-center text-[10px] text-text-muted">
           <Link to="/" className="pixel-focus transition-none hover:text-accent-watt">
-            ← Voltar para a fazenda
+            ← Back to the farm
           </Link>
         </p>
       </main>

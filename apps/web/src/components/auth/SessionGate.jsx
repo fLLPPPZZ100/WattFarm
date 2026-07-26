@@ -1,4 +1,4 @@
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Navigate, Outlet } from 'react-router-dom';
 
 import { useAuth } from '../../context/AuthContext.jsx';
 import { friendlyAuthError } from '../../lib/authErrors.js';
@@ -30,7 +30,7 @@ function GateScreen({ title, children }) {
  * account is being provisioned. Without this the app rendered its logged-out
  * layout for a frame on every reload, then snapped to the logged-in one.
  */
-export function SessionLoading({ label = 'Sincronizando' }) {
+export function SessionLoading({ label = 'Syncing' }) {
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden">
       <PixelSky />
@@ -66,22 +66,22 @@ export function ProvisionFailed() {
   const { provisionError, retryProvisioning, logout } = useAuth();
 
   return (
-    <GateScreen title="Conta indisponível">
+    <GateScreen title="Account unavailable">
       <PixelAlert className="mb-5">
-        {provisionError ? friendlyAuthError(provisionError) : 'Não foi possível preparar sua conta.'}
+        {provisionError ? friendlyAuthError(provisionError) : 'Could not prepare your account.'}
       </PixelAlert>
 
       <p className="mb-5 text-[11px] leading-relaxed text-text-muted">
-        Seu login funcionou, mas não conseguimos carregar seus dados de jogo. Isso costuma ser
-        temporário — o servidor pode estar iniciando.
+        Your sign-in worked, but we could not load your game data. This is usually temporary — the
+        server may still be starting up.
       </p>
 
       <div className="flex flex-col gap-2">
         <PixelButton className="w-full" onClick={retryProvisioning}>
-          Tentar novamente
+          Try again
         </PixelButton>
         <PixelButton variant="ghost" className="w-full" onClick={logout}>
-          Sair
+          Sign out
         </PixelButton>
       </div>
     </GateScreen>
@@ -97,18 +97,18 @@ export function ProvisionFailed() {
  */
 export function ConfigError() {
   return (
-    <GateScreen title="Configuração ausente">
+    <GateScreen title="Configuration missing">
       <p className="mb-4 text-[11px] leading-relaxed text-text-muted">
-        As variáveis de ambiente do Firebase não foram encontradas. Copie
+        The Firebase environment variables were not found. Copy
         <span className="mx-1 font-mono text-accent-watt">apps/web/.env.example</span>
-        para
+        to
         <span className="mx-1 font-mono text-accent-watt">apps/web/.env</span>
-        e preencha os valores do seu projeto.
+        and fill in the values from your project.
       </p>
 
       <div className="pixel-panel-inset p-3">
         <p className="mb-2 font-display text-[9px] uppercase tracking-widest text-text-muted">
-          Faltando
+          Missing
         </p>
         <ul className="space-y-1">
           {missingKeys.map((key) => (
@@ -120,9 +120,9 @@ export function ConfigError() {
       </div>
 
       <p className="mt-4 text-[10px] leading-relaxed text-text-muted">
-        Após editar o arquivo, reinicie o servidor de desenvolvimento — o Vite só lê o
+        After editing the file, restart the dev server — Vite only reads
         <span className="mx-1 font-mono">.env</span>
-        na inicialização.
+        at startup.
       </p>
     </GateScreen>
   );
@@ -137,16 +137,20 @@ export function ConfigError() {
  */
 export function RequireAuth() {
   const { initialising, isProvisioning, isAuthenticated, provisionFailed } = useAuth();
-  const location = useLocation();
 
-  if (initialising) return <SessionLoading label="Iniciando" />;
-  if (isProvisioning) return <SessionLoading label="Sincronizando" />;
+  if (initialising) return <SessionLoading label="Starting" />;
+  if (isProvisioning) return <SessionLoading label="Syncing" />;
   if (provisionFailed) return <ProvisionFailed />;
 
   if (!isAuthenticated) {
-    // `state.from` lets the login page send the user back to where they were
-    // headed instead of always landing on the dashboard.
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    /**
+     * No `state.from` is recorded. This used to hand the blocked location to the
+     * login page so a deep link resumed after signing in, but signing in now
+     * always lands on the farm — the game view is where a session is meant to
+     * start, and being dropped straight into /wallet or /storage on login is
+     * disorienting.
+     */
+    return <Navigate to="/login" replace />;
   }
 
   return <Outlet />;

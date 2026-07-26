@@ -13,62 +13,59 @@
 
 const MESSAGES = {
   // Credentials
-  'auth/invalid-credential': 'E-mail ou senha incorretos.',
-  'auth/wrong-password': 'E-mail ou senha incorretos.',
-  'auth/user-not-found': 'E-mail ou senha incorretos.',
-  'auth/invalid-email': 'Digite um endereço de e-mail válido.',
-  'auth/missing-password': 'Digite sua senha.',
+  'auth/invalid-credential': 'Incorrect email or password.',
+  'auth/wrong-password': 'Incorrect email or password.',
+  'auth/user-not-found': 'Incorrect email or password.',
+  'auth/invalid-email': 'Enter a valid email address.',
+  'auth/missing-password': 'Enter your password.',
 
   // Registration
-  'auth/email-already-in-use': 'Este e-mail já está cadastrado. Tente entrar.',
-  'auth/weak-password': 'Senha muito fraca. Use pelo menos 8 caracteres.',
+  'auth/email-already-in-use': 'This email is already registered. Try signing in.',
+  'auth/weak-password': 'Password too weak. Use at least 8 characters.',
 
   // Account state
-  'auth/user-disabled': 'Esta conta foi desativada. Fale com o suporte.',
-  'auth/requires-recent-login': 'Por segurança, entre novamente para continuar.',
+  'auth/user-disabled': 'This account has been disabled. Contact support.',
+  'auth/requires-recent-login': 'For security, sign in again to continue.',
 
   // Rate limiting / abuse
-  'auth/too-many-requests':
-    'Muitas tentativas. Aguarde alguns minutos antes de tentar de novo.',
+  'auth/too-many-requests': 'Too many attempts. Wait a few minutes before trying again.',
 
   // Network
   'auth/network-request-failed':
-    'Falha de conexão. Verifique sua internet e tente novamente.',
+    'Connection failed. Check your internet and try again.',
 
   // Google / popup flows
-  'auth/popup-closed-by-user': 'A janela de login foi fechada antes de concluir.',
-  'auth/cancelled-popup-request': 'Já existe uma tentativa de login em andamento.',
+  'auth/popup-closed-by-user': 'The sign-in window was closed before finishing.',
+  'auth/cancelled-popup-request': 'A sign-in attempt is already in progress.',
   'auth/popup-blocked':
-    'Seu navegador bloqueou a janela de login. Permita pop-ups e tente novamente.',
+    'Your browser blocked the sign-in window. Allow pop-ups and try again.',
   'auth/account-exists-with-different-credential':
-    'Já existe uma conta com este e-mail usando outro método de login.',
-  'auth/operation-not-allowed':
-    'Este método de login não está habilitado. Fale com o suporte.',
-  'auth/unauthorized-domain':
-    'Este domínio não está autorizado no Firebase Auth.',
+    'An account with this email already exists using a different sign-in method.',
+  'auth/operation-not-allowed': 'This sign-in method is not enabled. Contact support.',
+  'auth/unauthorized-domain': 'This domain is not authorised in Firebase Auth.',
 
   // Password reset
-  'auth/expired-action-code': 'Este link expirou. Solicite um novo.',
-  'auth/invalid-action-code': 'Este link é inválido ou já foi utilizado.',
+  'auth/expired-action-code': 'This link has expired. Request a new one.',
+  'auth/invalid-action-code': 'This link is invalid or has already been used.',
 
   // Configuration problems — these mean the developer has work to do, so the
   // message says so plainly instead of blaming the player.
-  'auth/invalid-api-key': 'Configuração do Firebase inválida (VITE_FIREBASE_API_KEY).',
+  'auth/invalid-api-key': 'Invalid Firebase configuration (VITE_FIREBASE_API_KEY).',
   'auth/configuration-not-found':
-    'Método de login não configurado no console do Firebase.',
-  'auth/internal-error': 'Algo deu errado do nosso lado. Tente novamente.',
+    'This sign-in method is not configured in the Firebase console.',
+  'auth/internal-error': 'Something went wrong on our end. Please try again.',
 };
 
 /** Backend error codes surfaced through ApiError during provisioning. */
 const API_MESSAGES = {
   'auth/email-already-linked':
-    'Este e-mail já está vinculado a outro método de login. Entre pelo método usado no cadastro.',
-  'auth/sync-failed': 'Não foi possível preparar sua conta. Tente novamente.',
-  'auth/email-not-verified': 'Verifique seu e-mail para liberar esta ação.',
-  'auth/revoked-token': 'Sua sessão foi encerrada. Entre novamente.',
-  'auth/expired-token': 'Sua sessão expirou. Entre novamente.',
-  'rate-limit/exceeded': 'Muitas requisições. Aguarde um momento.',
-  'network/unreachable': 'Não foi possível conectar ao servidor.',
+    'This email is already linked to another sign-in method. Sign in with the method you registered with.',
+  'auth/sync-failed': 'Could not prepare your account. Please try again.',
+  'auth/email-not-verified': 'Verify your email to unlock this action.',
+  'auth/revoked-token': 'Your session was ended. Please sign in again.',
+  'auth/expired-token': 'Your session expired. Please sign in again.',
+  'rate-limit/exceeded': 'Too many requests. Please wait a moment.',
+  'network/unreachable': 'Could not reach the server.',
 };
 
 /**
@@ -119,7 +116,7 @@ export function scorePassword(password) {
   }
 
   if (value.length < 8) {
-    return { score: 1, label: 'Muito curta', hint: 'Use pelo menos 8 caracteres.' };
+    return { score: 1, label: 'Too short', hint: 'Use at least 8 characters.' };
   }
 
   let points = 0;
@@ -132,11 +129,15 @@ export function scorePassword(password) {
 
   // Common weak patterns cancel out length credit.
   if (/^(.)\1+$/.test(value)) points = 1; // all one character
+  // `senha` is Portuguese for "password" and stays in the list despite the
+  // English-only rule: this is a blocklist of what people actually type, not
+  // copy. Players are largely Portuguese-speaking, so dropping it would let a
+  // genuinely weak password score well.
   if (/^(12345678|password|senha|qwerty|abc123)/i.test(value)) points = 1;
 
-  if (points <= 2) return { score: 2, label: 'Fraca', hint: 'Misture letras, números e símbolos.' };
-  if (points <= 4) return { score: 3, label: 'Boa', hint: 'Dá para melhorar com mais variedade.' };
-  return { score: 4, label: 'Forte', hint: 'Senha forte.' };
+  if (points <= 2) return { score: 2, label: 'Weak', hint: 'Mix letters, numbers and symbols.' };
+  if (points <= 4) return { score: 3, label: 'Good', hint: 'More variety would make it stronger.' };
+  return { score: 4, label: 'Strong', hint: 'Strong password.' };
 }
 
 export default friendlyAuthError;

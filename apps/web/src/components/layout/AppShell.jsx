@@ -19,7 +19,7 @@ import { getAvatarImage } from '../../data/avatars.js';
 
 
 const NAV_LINKS = [
-  { to: '/', label: 'Dashboard', icon: '📊' },
+  { to: '/', label: 'Farm', icon: '🌱' },
   { to: '/shop', label: 'Shop', icon: '🛒' },
   { to: '/minigames', label: 'Minigames', icon: '🎮' },
   { to: '/wallet', label: 'Wallet', icon: '💰' },
@@ -176,7 +176,7 @@ export default function AppShell() {
     return function () { document.removeEventListener('keydown', onKeyDown); };
   }, [accountMenuOpen]);
 
-  var isDashboard = location.pathname === '/';
+  var isFarmView = location.pathname === '/';
 
   // A route change must close the menu. Selecting "Profile" while already on
   // /profile does not unmount anything, so the menu would otherwise stay open.
@@ -187,12 +187,12 @@ export default function AppShell() {
   useEffect(function () {
     var el = document.getElementById('phaser-root');
     if (!el) return;
-    if (isDashboard) {
+    if (isFarmView) {
       el.style.display = 'flex';
     } else {
       el.style.display = 'none';
     }
-  }, [isDashboard]);
+  }, [isFarmView]);
 
   return (
     <div className="min-h-screen bg-bg-abyss text-text-primary font-body flex">
@@ -284,7 +284,7 @@ export default function AppShell() {
                   onClick={toggleAccountMenu}
                   aria-haspopup="true"
                   aria-expanded={accountMenuOpen}
-                  aria-label="Abrir menu da conta"
+                  aria-label="Open account menu"
                   className={'flex items-center gap-3 p-1 pr-2 border cursor-pointer transition-colors ' + (accountMenuOpen ? 'bg-bg-abyss border-accent-watt/40 rounded-xl' : 'border-transparent hover:bg-bg-abyss/60 rounded-xl')}
                 >
                   <span
@@ -316,7 +316,7 @@ export default function AppShell() {
                       menu with submenus.
                     */}
                     <div
-                      aria-label="Conta"
+                      aria-label="Account"
                       className="absolute right-0 top-full mt-2 w-56 bg-bg-panel border border-line-dusk rounded-xl shadow-2xl z-40 overflow-hidden py-1"
                     >
                       <button
@@ -329,7 +329,7 @@ export default function AppShell() {
                       </button>
 
                       {/*
-                        Referências has no route yet, so it is rendered disabled
+                        Referrals has no route yet, so it is rendered disabled
                         rather than as a link that goes nowhere — a menu item
                         that silently does nothing reads as a bug. The `Soon`
                         tag carries that state as text, rather than leaving it
@@ -342,7 +342,7 @@ export default function AppShell() {
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted/40 cursor-not-allowed"
                       >
                         <span className="text-base w-5 text-center">🔗</span>
-                        <span>Referências</span>
+                        <span>Referrals</span>
                         <span className="ml-auto text-[10px] uppercase tracking-wider border border-line-dusk rounded px-1.5 py-0.5">Soon</span>
                       </button>
 
@@ -368,7 +368,7 @@ export default function AppShell() {
 
         <div className="flex-1 relative overflow-hidden">
           {/* 3-column layout: power panel (left) + game viewport (center) + ad space (right) */}
-          {isDashboard && user && (
+          {isFarmView && user && (
             <>
               {/* LEFT: Power Panel */}
               <div className="absolute left-4 top-4 z-10 hidden lg:block">
@@ -404,7 +404,7 @@ export default function AppShell() {
               </div>
 
               {/* RIGHT: Ad placeholder */}
-              {/* TODO: substituir por integração real de ads (ex: AdSense, AdinPlay) quando definido */}
+              {/* TODO: replace with a real ad integration (e.g. AdSense, AdinPlay) once chosen */}
               <div className="absolute right-4 top-4 z-10 hidden xl:block">
                 <div className="flex items-center justify-center border border-dashed border-line-dusk rounded-xl bg-bg-panel/40 w-[160px] h-[600px]">
                   <span className="text-xs text-text-muted text-center px-2">
@@ -419,7 +419,7 @@ export default function AppShell() {
           <div id="phaser-root" className="absolute left-1/2 top-3 -translate-x-1/2 z-0" style={{ width: '960px', height: '640px' }} />
 
           {/* Non-dashboard routes */}
-          {!isDashboard && (
+          {!isFarmView && (
             <main className="absolute inset-0 overflow-y-auto z-0">
               <div className="max-w-5xl mx-auto px-6 py-6">
                 <Outlet />

@@ -6,7 +6,7 @@ import { RequireAuth, ConfigError } from './components/auth/SessionGate.jsx';
 
 import AppShell from './components/layout/AppShell';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
+import Farm from './pages/Farm';
 import MyAssets from './pages/MyAssets';
 import Minigames from './pages/Minigames';
 import Wallet from './pages/Wallet';
@@ -33,7 +33,7 @@ export default function App() {
           {/* Everything else requires a fully provisioned session */}
           <Route element={<RequireAuth />}>
             <Route element={<AppShell />}>
-              <Route index element={<Dashboard />} />
+              <Route index element={<Farm />} />
               <Route path="shop" element={<MyAssets />} />
               <Route path="minigames" element={<Minigames />} />
               <Route path="wallet" element={<Wallet />} />

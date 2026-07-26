@@ -123,7 +123,7 @@ export function PixelSpinner({ className = '' }) {
     <span
       className={`inline-flex gap-0.5 ${className}`}
       role="status"
-      aria-label="Carregando"
+      aria-label="Loading"
     >
       {[0, 1, 2, 3].map((i) => (
         <span
@@ -232,7 +232,7 @@ export const PixelField = forwardRef(function PixelField(
           <button
             type="button"
             onClick={() => setRevealed((v) => !v)}
-            aria-label={revealed ? 'Ocultar senha' : 'Mostrar senha'}
+            aria-label={revealed ? 'Hide password' : 'Show password'}
             className="pixel-focus absolute right-1.5 top-1/2 flex h-7 w-8 -translate-y-1/2 items-center
                        justify-center text-text-muted transition-none hover:text-accent-watt"
           >

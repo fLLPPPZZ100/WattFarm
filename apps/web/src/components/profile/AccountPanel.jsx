@@ -85,7 +85,7 @@ export default function AccountPanel() {
 
     const trimmed = nicknameValue.trim();
     if (trimmed.length > MAX_NICKNAME_LENGTH) {
-      setNicknameError(`O apelido pode ter no máximo ${MAX_NICKNAME_LENGTH} caracteres.`);
+      setNicknameError(`A nickname can be at most ${MAX_NICKNAME_LENGTH} characters.`);
       return;
     }
     if (trimmed === currentNickname) {
@@ -97,7 +97,7 @@ export default function AccountPanel() {
     setNicknameError('');
     try {
       await updateDisplayName(trimmed);
-      setNicknameDone(trimmed ? 'Apelido atualizado.' : 'Apelido removido.');
+      setNicknameDone(trimmed ? 'Nickname updated.' : 'Nickname removed.');
       setEditingNickname(false);
     } catch (err) {
       setNicknameError(friendlyAuthError(err));
@@ -131,15 +131,15 @@ export default function AccountPanel() {
     event.preventDefault();
 
     if (newPassword.length < MIN_PASSWORD_LENGTH) {
-      setPasswordError(`A nova senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`);
+      setPasswordError(`The new password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError('As senhas não coincidem.');
+      setPasswordError('The passwords do not match.');
       return;
     }
     if (newPassword === currentPassword) {
-      setPasswordError('A nova senha precisa ser diferente da atual.');
+      setPasswordError('The new password must be different from the current one.');
       return;
     }
 
@@ -147,18 +147,18 @@ export default function AccountPanel() {
     setPasswordError('');
     try {
       await changePassword(currentPassword, newPassword);
-      setPasswordDone('Senha alterada.');
+      setPasswordDone('Password changed.');
       closePasswordForm();
     } catch (err) {
       /**
        * A failed re-authentication comes back as the same code as a failed
-       * login, and the shared copy for it reads "E-mail ou senha incorretos" —
+       * login, and the shared copy for it reads "Incorrect email or password" —
        * which points at a field this form does not even have. Name the actual
        * problem instead.
        */
       const code = err?.code || '';
       if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
-        setPasswordError('Senha atual incorreta.');
+        setPasswordError('Current password is incorrect.');
       } else {
         setPasswordError(friendlyAuthError(err));
       }
@@ -192,7 +192,7 @@ export default function AccountPanel() {
         <div className="min-w-0 flex-1">
           <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Nickname</p>
           <p className="font-display text-lg text-accent-watt truncate">
-            {currentNickname || <span className="text-text-muted">Sem apelido</span>}
+            {currentNickname || <span className="text-text-muted">No nickname</span>}
           </p>
           {!editingNickname && (
             <button
@@ -217,12 +217,12 @@ export default function AccountPanel() {
             value={nicknameValue}
             onChange={(e) => setNicknameValue(e.target.value)}
             maxLength={MAX_NICKNAME_LENGTH}
-            placeholder="Seu apelido"
+            placeholder="Your nickname"
             autoFocus
             className={inputClass}
           />
           <p className="text-[10px] text-text-muted">
-            Aparece no topo da tela. Deixe vazio para usar seu e-mail.
+            Shown at the top of the screen. Leave empty to use your email.
           </p>
           {nicknameError && <p className="text-xs text-red-300">{nicknameError}</p>}
           <div className="flex gap-2">
@@ -231,14 +231,14 @@ export default function AccountPanel() {
               disabled={nicknameSaving}
               className="bg-accent-watt text-bg-abyss font-semibold px-4 py-1.5 rounded text-xs hover:brightness-110 transition-all disabled:opacity-40"
             >
-              {nicknameSaving ? 'Salvando...' : 'Salvar'}
+              {nicknameSaving ? 'Saving...' : 'Save'}
             </button>
             <button
               type="button"
               onClick={() => setEditingNickname(false)}
               className="px-4 py-1.5 rounded text-xs text-text-muted hover:text-text-primary border border-line-dusk"
             >
-              Cancelar
+              Cancel
             </button>
           </div>
         </form>
@@ -250,7 +250,7 @@ export default function AccountPanel() {
           {user?.email || '—'}
           {!emailVerified && (
             <span className="ml-2 text-[10px] uppercase tracking-wider text-red-300 border border-red-800 rounded px-1.5 py-0.5 align-middle">
-              não verificado
+              not verified
             </span>
           )}
         </Field>
@@ -261,9 +261,9 @@ export default function AccountPanel() {
           {user?.uid || '—'}
         </Field>
 
-        <Field label="Conta criada em">{joinDate || '—'}</Field>
+        <Field label="Member since">{joinDate || '—'}</Field>
 
-        <Field label="Tempo de conta">{age || '—'}</Field>
+        <Field label="Account age">{age || '—'}</Field>
       </div>
 
       {/* Password */}
@@ -273,12 +273,12 @@ export default function AccountPanel() {
             {!editingPassword && (
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm text-text-primary">Senha</p>
+                  <p className="text-sm text-text-primary">Password</p>
                   {passwordDone ? (
                     <p className="text-xs text-accent-current mt-0.5">{passwordDone}</p>
                   ) : (
                     <p className="text-xs text-text-muted mt-0.5">
-                      Pediremos sua senha atual para confirmar.
+                      We will ask for your current password to confirm.
                     </p>
                   )}
                 </div>
@@ -303,7 +303,7 @@ export default function AccountPanel() {
                   type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Senha atual"
+                  placeholder="Current password"
                   autoComplete="current-password"
                   className={inputClass}
                 />
@@ -311,7 +311,7 @@ export default function AccountPanel() {
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Nova senha"
+                  placeholder="New password"
                   autoComplete="new-password"
                   className={inputClass}
                 />
@@ -319,7 +319,7 @@ export default function AccountPanel() {
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Repita a nova senha"
+                  placeholder="Repeat the new password"
                   autoComplete="new-password"
                   className={inputClass}
                 />
@@ -327,7 +327,7 @@ export default function AccountPanel() {
                 {/* Same meter as registration, so the guidance is consistent. */}
                 {newPassword && (
                   <p className="text-[10px] text-text-muted">
-                    Força: <span className="text-text-primary">{strength.label}</span>
+                    Strength: <span className="text-text-primary">{strength.label}</span>
                     {strength.hint ? ` — ${strength.hint}` : ''}
                   </p>
                 )}
@@ -340,14 +340,14 @@ export default function AccountPanel() {
                     disabled={passwordSaving}
                     className="bg-accent-watt text-bg-abyss font-semibold px-4 py-1.5 rounded text-xs hover:brightness-110 transition-all disabled:opacity-40"
                   >
-                    {passwordSaving ? 'Salvando...' : 'Salvar senha'}
+                    {passwordSaving ? 'Saving...' : 'Save password'}
                   </button>
                   <button
                     type="button"
                     onClick={closePasswordForm}
                     className="px-4 py-1.5 rounded text-xs text-text-muted hover:text-text-primary border border-line-dusk"
                   >
-                    Cancelar
+                    Cancel
                   </button>
                 </div>
               </form>
@@ -357,9 +357,9 @@ export default function AccountPanel() {
           /* A Google-only account has no password; offering the form would
              produce a Firebase error the player cannot act on. */
           <div>
-            <p className="text-sm text-text-primary">Senha</p>
+            <p className="text-sm text-text-primary">Password</p>
             <p className="text-xs text-text-muted mt-0.5">
-              Sua conta entra pelo Google, então a senha é gerenciada lá.
+              Your account signs in with Google, so the password is managed there.
             </p>
           </div>
         )}

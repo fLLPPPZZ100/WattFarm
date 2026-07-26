@@ -28,7 +28,7 @@ export default function Wallet() {
         // Ignore the abort triggered by unmount; report anything else instead
         // of failing silently as the previous version did.
         if (err?.name === 'AbortError') return;
-        setError(err.message || 'Não foi possível carregar a carteira.');
+        setError(err.message || 'Could not load the wallet.');
       } finally {
         setLoading(false);
       }
@@ -42,7 +42,7 @@ export default function Wallet() {
     return (
       <div className="text-center py-20">
         <p className="font-display text-[11px] uppercase tracking-widest text-text-muted">
-          Carregando carteira
+          Loading wallet
           <span className="ml-1 inline-block h-3 w-2 bg-accent-watt align-middle animate-blink" />
         </p>
       </div>

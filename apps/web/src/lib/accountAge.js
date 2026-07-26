@@ -3,23 +3,23 @@
  *
  * ## Precision rules
  *
- * The unit shown gets coarser as the account gets older, because "4 meses,
- * 7 dias, 21 horas" is noise — nobody reads past the first number once it is in
+ * The unit shown gets coarser as the account gets older, because "4 months,
+ * 7 days, 21 hours" is noise — nobody reads past the first number once it is in
  * months:
  *
- *   under a minute   "menos de 1 minuto"
- *   under an hour    "12 minutos"
- *   under a day      "5 horas"
- *   under a month    "7 dias, 21 horas"   (hours dropped when exactly 0)
- *   under a year     "3 meses"
- *   a year or more   "2 anos"
+ *   under a minute   "less than a minute"
+ *   under an hour    "12 minutes"
+ *   under a day      "5 hours"
+ *   under a month    "7 days, 21 hours"   (hours dropped when exactly 0)
+ *   under a year     "3 months"
+ *   a year or more   "2 years"
  *
  * ## Why calendar arithmetic and not milliseconds
  *
  * Dividing an elapsed millisecond count by 30 days is the obvious approach and
  * it drifts: an account created on 31 January is "1 month" old on 2 March by
  * that maths, and February/leap years make the error grow. This walks the
- * calendar fields and borrows between them, so "1 mês" means the same calendar
+ * calendar fields and borrows between them, so "1 month" means the same calendar
  * day one month later, whatever the month length.
  *
  * Kept free of React and of any import so it can be exercised directly —
@@ -30,13 +30,13 @@ const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 
-/** Portuguese singular/plural for the units used below. */
+/** Singular/plural for the units used below. */
 const UNITS = {
-  minute: ['minuto', 'minutos'],
-  hour: ['hora', 'horas'],
-  day: ['dia', 'dias'],
-  month: ['mês', 'meses'],
-  year: ['ano', 'anos'],
+  minute: ['minute', 'minutes'],
+  hour: ['hour', 'hours'],
+  day: ['day', 'days'],
+  month: ['month', 'months'],
+  year: ['year', 'years'],
 };
 
 function plural(unit, value) {
@@ -165,7 +165,7 @@ export function formatAccountAge(createdAt, now = new Date()) {
 
   // Clock skew between the server and the browser can put creation slightly in
   // the future. Reporting a negative age would be worse than rounding to zero.
-  if (created.getTime() > now.getTime()) return 'menos de 1 minuto';
+  if (created.getTime() > now.getTime()) return 'less than a minute';
 
   const { years, days, hours, minutes, totalMonths } = calendarDiff(created, now);
 
@@ -174,24 +174,29 @@ export function formatAccountAge(createdAt, now = new Date()) {
 
   if (days >= 1) {
     // Hours are only worth showing while days are still the leading unit, and
-    // "7 dias, 0 horas" reads worse than "7 dias".
+    // "7 days, 0 hours" reads worse than "7 days".
     return hours > 0 ? `${plural('day', days)}, ${plural('hour', hours)}` : plural('day', days);
   }
 
   if (hours >= 1) return plural('hour', hours);
   if (minutes >= 1) return plural('minute', minutes);
 
-  return 'menos de 1 minuto';
+  return 'less than a minute';
 }
 
 /**
- * Creation date for display, e.g. "24 de julho de 2026".
+ * Creation date for display, e.g. "24 July 2026".
+ *
+ * The default locale is `en-GB` rather than `en-US` to keep day-before-month
+ * ordering, which is what the players of this game read natively. Copy is
+ * English by rule; date *format* is a presentation choice and does not have to
+ * follow American convention.
  *
  * @param {string | number | Date | null | undefined} createdAt
  * @param {string} [locale]
  * @returns {string | null}
  */
-export function formatJoinDate(createdAt, locale = 'pt-BR') {
+export function formatJoinDate(createdAt, locale = 'en-GB') {
   const created = parseDate(createdAt);
   if (!created) return null;
 

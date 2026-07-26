@@ -37,9 +37,9 @@ function expect(label, actual, expected) {
 
 /* ── Sub-minute and minutes ──────────────────────────────────────── */
 
-expectAge('same instant', at(2026, 7, 26, 12, 0), at(2026, 7, 26, 12, 0), 'menos de 1 minuto');
-expectAge('one minute', at(2026, 7, 26, 12, 0), at(2026, 7, 26, 12, 1), '1 minuto');
-expectAge('forty minutes', at(2026, 7, 26, 12, 0), at(2026, 7, 26, 12, 40), '40 minutos');
+expectAge('same instant', at(2026, 7, 26, 12, 0), at(2026, 7, 26, 12, 0), 'less than a minute');
+expectAge('one minute', at(2026, 7, 26, 12, 0), at(2026, 7, 26, 12, 1), '1 minute');
+expectAge('forty minutes', at(2026, 7, 26, 12, 0), at(2026, 7, 26, 12, 40), '40 minutes');
 
 // Server/browser clock skew can put creation in the future; a negative age
 // would be worse than clamping.
@@ -47,31 +47,31 @@ expectAge(
   'creation in the future clamps',
   at(2026, 7, 26, 13, 0),
   at(2026, 7, 26, 12, 0),
-  'menos de 1 minuto'
+  'less than a minute'
 );
 
 /* ── Hours ───────────────────────────────────────────────────────── */
 
-expectAge('one hour', at(2026, 7, 26, 12, 0), at(2026, 7, 26, 13, 0), '1 hora');
-expectAge('five hours', at(2026, 7, 26, 8, 0), at(2026, 7, 26, 13, 30), '5 horas');
-expectAge('23 hours stays hours', at(2026, 7, 25, 14, 0), at(2026, 7, 26, 13, 0), '23 horas');
+expectAge('one hour', at(2026, 7, 26, 12, 0), at(2026, 7, 26, 13, 0), '1 hour');
+expectAge('five hours', at(2026, 7, 26, 8, 0), at(2026, 7, 26, 13, 30), '5 hours');
+expectAge('23 hours stays hours', at(2026, 7, 25, 14, 0), at(2026, 7, 26, 13, 0), '23 hours');
 
 /* ── Days, with hours ────────────────────────────────────────────── */
 
-expectAge('exactly one day', at(2026, 7, 25, 12, 0), at(2026, 7, 26, 12, 0), '1 dia');
-expectAge('one day and one hour', at(2026, 7, 25, 12, 0), at(2026, 7, 26, 13, 0), '1 dia, 1 hora');
+expectAge('exactly one day', at(2026, 7, 25, 12, 0), at(2026, 7, 26, 12, 0), '1 day');
+expectAge('one day and one hour', at(2026, 7, 25, 12, 0), at(2026, 7, 26, 13, 0), '1 day, 1 hour');
 
 // The shape from the original request.
-expectAge('seven days and 21 hours', at(2026, 7, 18, 15, 0), at(2026, 7, 26, 12, 0), '7 dias, 21 horas');
+expectAge('seven days and 21 hours', at(2026, 7, 18, 15, 0), at(2026, 7, 26, 12, 0), '7 days, 21 hours');
 
-// "7 dias, 0 horas" reads worse than "7 dias".
-expectAge('zero hours are omitted', at(2026, 7, 19, 12, 0), at(2026, 7, 26, 12, 0), '7 dias');
+// "7 days, 0 hours" reads worse than "7 days".
+expectAge('zero hours are omitted', at(2026, 7, 19, 12, 0), at(2026, 7, 26, 12, 0), '7 days');
 
-expectAge('30 days is still days', at(2026, 7, 1, 12, 0), at(2026, 7, 31, 12, 0), '30 dias');
+expectAge('30 days is still days', at(2026, 7, 1, 12, 0), at(2026, 7, 31, 12, 0), '30 days');
 
 /* ── Months: coarse only ─────────────────────────────────────────── */
 
-expectAge('exactly one month', at(2026, 6, 26, 12, 0), at(2026, 7, 26, 12, 0), '1 mês');
+expectAge('exactly one month', at(2026, 6, 26, 12, 0), at(2026, 7, 26, 12, 0), '1 month');
 
 // One hour short of a month must not round up. June has 30 days, so 30 days
 // after 26 Jun 13:00 is 26 Jul 13:00 — an hour later than `now`, leaving
@@ -81,20 +81,20 @@ expectAge(
   'one hour before a month',
   at(2026, 6, 26, 13, 0),
   at(2026, 7, 26, 12, 0),
-  '29 dias, 23 horas'
+  '29 days, 23 hours'
 );
 
-expectAge('four months drops days and hours', at(2026, 3, 19, 15, 0), at(2026, 7, 26, 12, 0), '4 meses');
-expectAge('eleven months', at(2025, 8, 26, 12, 0), at(2026, 7, 26, 12, 0), '11 meses');
+expectAge('four months drops days and hours', at(2026, 3, 19, 15, 0), at(2026, 7, 26, 12, 0), '4 months');
+expectAge('eleven months', at(2025, 8, 26, 12, 0), at(2026, 7, 26, 12, 0), '11 months');
 
 /* ── Years: coarse only ──────────────────────────────────────────── */
 
-expectAge('exactly one year', at(2025, 7, 26, 12, 0), at(2026, 7, 26, 12, 0), '1 ano');
-expectAge('one year eleven months is still 1 ano', at(2024, 8, 26, 12, 0), at(2026, 7, 26, 12, 0), '1 ano');
-expectAge('two years', at(2024, 7, 26, 12, 0), at(2026, 7, 26, 12, 0), '2 anos');
+expectAge('exactly one year', at(2025, 7, 26, 12, 0), at(2026, 7, 26, 12, 0), '1 year');
+expectAge('one year eleven months is still 1 year', at(2024, 8, 26, 12, 0), at(2026, 7, 26, 12, 0), '1 year');
+expectAge('two years', at(2024, 7, 26, 12, 0), at(2026, 7, 26, 12, 0), '2 years');
 
-// A day short of a year must report months, not "1 ano".
-expectAge('one day before a year', at(2025, 7, 27, 12, 0), at(2026, 7, 26, 12, 0), '11 meses');
+// A day short of a year must report months, not "1 year".
+expectAge('one day before a year', at(2025, 7, 27, 12, 0), at(2026, 7, 26, 12, 0), '11 months');
 
 /* ── Calendar edge cases ─────────────────────────────────────────── */
 
@@ -124,7 +124,7 @@ expect(
   calendarDiff(at(2025, 12, 15), at(2026, 1, 10)).months,
   0
 );
-expectAge('crossing new year', at(2025, 12, 15, 12, 0), at(2026, 1, 10, 12, 0), '26 dias');
+expectAge('crossing new year', at(2025, 12, 15, 12, 0), at(2026, 1, 10, 12, 0), '26 days');
 
 // Every field of a borrowed diff must be non-negative.
 const borrowed = calendarDiff(at(2026, 3, 31, 23, 59), at(2026, 4, 1, 0, 0));
