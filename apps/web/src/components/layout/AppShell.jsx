@@ -42,6 +42,7 @@ export default function AppShell() {
   const { placedSolar, placedMount, powerRate, networkBaseline } = usePlacementStore();
   const [activeCurrency, setActiveCurrency] = useState('VLT');
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [countdown, setCountdown] = useState(CYCLE_SECONDS);
   const btcBalance = 0;
   const ethBalance = 0;
@@ -133,7 +134,46 @@ export default function AppShell() {
     logout();
   }
 
+  /**
+   * The two header dropdowns are mutually exclusive — opening one closes the
+   * other, otherwise both panels can be on screen at once and they overlap.
+   */
+  function toggleAccountMenu() {
+    setDropdownOpen(false);
+    setAccountMenuOpen(function (open) { return !open; });
+  }
+
+  function openCurrencyDropdown() {
+    setAccountMenuOpen(false);
+    setDropdownOpen(!dropdownOpen);
+  }
+
+  /** Navigates from a menu item, closing the menu first. */
+  function goFromAccountMenu(to) {
+    setAccountMenuOpen(false);
+    navigate(to);
+  }
+
+  // Escape closes the account menu. A click-away overlay handles the mouse, but
+  // a keyboard user who opened the menu with Enter has no way out without this.
+  useEffect(function () {
+    if (!accountMenuOpen) return undefined;
+
+    function onKeyDown(event) {
+      if (event.key === 'Escape') setAccountMenuOpen(false);
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    return function () { document.removeEventListener('keydown', onKeyDown); };
+  }, [accountMenuOpen]);
+
   var isDashboard = location.pathname === '/';
+
+  // A route change must close the menu. Selecting "Profile" while already on
+  // /profile does not unmount anything, so the menu would otherwise stay open.
+  useEffect(function () {
+    setAccountMenuOpen(false);
+  }, [location.pathname]);
   // Phaser root: always in DOM for canvas persistence; show/hide via display
   useEffect(function () {
     var el = document.getElementById('phaser-root');
@@ -168,9 +208,9 @@ export default function AppShell() {
             })}
           </nav>
         )}
-        <div className="px-3 py-3 border-t border-line-dusk">
-          <button onClick={handleLogout} className="w-full text-left px-3 py-2 rounded-lg text-sm text-text-muted hover:text-red-400 hover:bg-red-400/5 transition-all border border-transparent hover:border-red-400/20">Log out</button>
-        </div>
+        {/* Log out moved into the account menu in the header, next to Profile —
+            it belongs with the other account actions rather than sitting alone
+            at the bottom of the navigation. */}
       </aside>
 
       {/* ========== MAIN AREA ========== */}
@@ -181,7 +221,7 @@ export default function AppShell() {
             {user && (
               <div className="relative shrink-0">
                 <button
-                  onClick={function () { setDropdownOpen(!dropdownOpen); }}
+                  onClick={openCurrencyDropdown}
                   className={'flex items-center gap-3 bg-bg-abyss px-4 py-2.5 border border-line-dusk hover:border-accent-watt/40 cursor-pointer ' + (dropdownOpen ? 'rounded-t-xl border-b border-b-transparent' : 'rounded-xl')}
                 >
                   <img src={active.img} alt={active.label} width="32" height="32" style={{ imageRendering: 'pixelated', filter: 'drop-shadow(0 0 6px rgba(242,184,75,0.5))' }} />
@@ -219,31 +259,97 @@ export default function AppShell() {
             {/* CENTER: flexible spacer */}
             {user && <div className="flex-1" />}
 
-            {/* RIGHT: Profile avatar or Login button */}
+            {/* RIGHT: account menu (avatar + name) */}
             {user ? (
-              <div className="flex items-center gap-3 shrink-0" title="Profile">
-                <div
-                  onClick={function () { navigate('/profile'); }}
-                  onKeyDown={function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/profile'); } }}
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Abrir perfil"
-                  className="shrink-0 cursor-pointer hover:opacity-80 transition-opacity rounded-xl overflow-hidden border border-line-dusk bg-bg-abyss box-border"
-                  style={{ width: '54px', height: '54px' }}
+              <div className="relative shrink-0">
+                {/*
+                  Avatar and name are one button rather than two clickable
+                  elements. They used to be separate `role="button"` divs that
+                  both navigated straight to /profile; making them a single real
+                  <button> gives keyboard and screen-reader support for free
+                  (Enter/Space, focus ring, expanded state) instead of
+                  reimplementing it with onKeyDown handlers.
+                */}
+                <button
+                  type="button"
+                  onClick={toggleAccountMenu}
+                  aria-haspopup="true"
+                  aria-expanded={accountMenuOpen}
+                  aria-label="Abrir menu da conta"
+                  className={'flex items-center gap-3 p-1 pr-2 border cursor-pointer transition-colors ' + (accountMenuOpen ? 'bg-bg-abyss border-accent-watt/40 rounded-xl' : 'border-transparent hover:bg-bg-abyss/60 rounded-xl')}
                 >
-                  <img src={avatarImg} alt="" className="w-full h-full object-cover block" style={{ imageRendering: 'pixelated' }} />
-                </div>
-                <span
-                  onClick={function () { navigate('/profile'); }}
-                  onKeyDown={function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/profile'); } }}
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Abrir perfil"
-                  className="text-text-primary text-sm font-extrabold uppercase tracking-wider whitespace-nowrap hidden sm:inline max-w-[160px] truncate cursor-pointer hover:opacity-80 transition-opacity"
-                  style={{ lineHeight: '1' }}
-                >
-                  {user.displayName || user.email}
-                </span>
+                  <span
+                    className="shrink-0 block rounded-xl overflow-hidden border border-line-dusk bg-bg-abyss box-border"
+                    style={{ width: '54px', height: '54px' }}
+                  >
+                    <img src={avatarImg} alt="" className="w-full h-full object-cover block" style={{ imageRendering: 'pixelated' }} />
+                  </span>
+                  <span
+                    className="text-text-primary text-sm font-extrabold uppercase tracking-wider whitespace-nowrap hidden sm:inline max-w-[160px] truncate"
+                    style={{ lineHeight: '1' }}
+                  >
+                    {user.displayName || user.email}
+                  </span>
+                  <span aria-hidden="true" className={'text-text-muted text-xs transition-transform ' + (accountMenuOpen ? 'rotate-180' : '')}>▼</span>
+                </button>
+
+                {accountMenuOpen && (
+                  <>
+                    {/* Click-away layer, matching the currency dropdown above. */}
+                    <div className="fixed inset-0 z-30" onClick={function () { setAccountMenuOpen(false); }} />
+                    {/*
+                      Deliberately NOT role="menu". That role is a promise of
+                      arrow-key navigation with managed focus, and a screen
+                      reader will stop treating Tab as the way through the
+                      items once it sees it. With three plain buttons, native
+                      Tab order plus Escape is fully usable and honest about
+                      what is implemented. Revisit if this grows into a real
+                      menu with submenus.
+                    */}
+                    <div
+                      aria-label="Conta"
+                      className="absolute right-0 top-full mt-2 w-56 bg-bg-panel border border-line-dusk rounded-xl shadow-2xl z-40 overflow-hidden py-1"
+                    >
+                      <button
+                        type="button"
+                        onClick={function () { goFromAccountMenu('/profile'); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:text-text-primary hover:bg-bg-abyss/50 transition-colors"
+                      >
+                        <span className="text-base w-5 text-center">👤</span>
+                        <span>Profile</span>
+                      </button>
+
+                      {/*
+                        Referências has no route yet, so it is rendered disabled
+                        rather than as a link that goes nowhere — a menu item
+                        that silently does nothing reads as a bug. The `Soon`
+                        tag carries that state as text, rather than leaving it
+                        to the dimmed colour alone; a `title` tooltip would not
+                        do, since browsers suppress those on disabled controls.
+                      */}
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted/40 cursor-not-allowed"
+                      >
+                        <span className="text-base w-5 text-center">🔗</span>
+                        <span>Referências</span>
+                        <span className="ml-auto text-[10px] uppercase tracking-wider border border-line-dusk rounded px-1.5 py-0.5">Soon</span>
+                      </button>
+
+                      <div className="my-1 border-t border-line-dusk" />
+
+                      <button
+                        type="button"
+                        onClick={function () { setAccountMenuOpen(false); handleLogout(); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:text-red-400 hover:bg-red-400/5 transition-colors"
+                      >
+                        <span className="text-base w-5 text-center">🚪</span>
+                        <span>Log out</span>
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ) : null}
           </div>
