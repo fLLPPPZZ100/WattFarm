@@ -259,30 +259,28 @@ export default function AppShell() {
         <EmailVerificationBanner />
 
         <div className="flex-1 relative overflow-hidden">
-          {/* 3-column layout: power panel (left) + game viewport (center) + ad space (right) */}
-          {isDashboard && user && (
-            <>
-              {/*
-                Stats panel, overlaid on the canvas rather than beside it.
+          {/*
+            Game viewport and its stats panel are laid out as one centred pair.
 
-                The trunk cable is drawn inside the canvas and has to terminate
-                exactly at this panel's right edge. Sharing one coordinate space
-                is what makes that possible — positioning the panel outside the
-                canvas would need canvas-to-page conversion that breaks on any
-                viewport change. The grid reserves the strip it sits on, so it
-                never covers a build cell.
+            The panel sits beside the canvas, not over it, and the trunk cable
+            drawn inside the canvas runs out to the left edge at STATION.connectorY.
+            Because both share the same top edge, that height lines up with the
+            panel's own connector and the wire reads as continuous across the
+            boundary. Geometry comes from game/layout.js — a few pixels of drift
+            shows up as a severed cable.
 
-                Geometry comes from game/layout.js; a few pixels of disagreement
-                shows up as a severed wire.
-              */}
+            The panel needs 176px beside a 960px canvas, so it only appears when
+            there is genuinely room; below that the canvas re-centres on its own.
+          */}
+          <div className="absolute inset-0 flex justify-center pt-3 pointer-events-none">
+            {isDashboard && user && (
               <div
-                className="absolute left-1/2 -translate-x-1/2 z-10 pointer-events-none hidden lg:block"
-                style={{ top: '12px', width: CANVAS.width, height: CANVAS.height }}
+                className="relative shrink-0 hidden 2xl:block pointer-events-auto"
+                style={{ width: STATION.width, height: CANVAS.height }}
               >
                 <div
-                  className="absolute flex flex-col gap-2.5 bg-bg-panel/90 backdrop-blur-sm border-2 border-line-dusk p-3"
+                  className="absolute right-0 flex flex-col gap-2.5 bg-bg-panel border-2 border-line-dusk p-3"
                   style={{
-                    left: STATION.left,
                     top: STATION.top,
                     width: STATION.width,
                     height: STATION.height,
@@ -290,6 +288,29 @@ export default function AppShell() {
                 >
                   {/* Accent rule, matching the site's panels. */}
                   <div className="absolute inset-x-0 top-0 h-0.5 bg-accent-watt" />
+
+                  {/*
+                    Connector stub on the panel's right edge, level with the
+                    cable leaving the canvas, so the two meet as one wire.
+                  */}
+                  <div
+                    className="absolute bg-[#101c26]"
+                    style={{
+                      right: -6,
+                      top: STATION.height / 2 - 1,
+                      width: 6,
+                      height: 2,
+                    }}
+                  />
+                  <div
+                    className="absolute bg-[#101c26]"
+                    style={{
+                      right: -3,
+                      top: STATION.height / 2 - 5,
+                      width: 5,
+                      height: 10,
+                    }}
+                  />
 
                   <div>
                     <p className="text-[9px] text-text-muted uppercase tracking-wider">Your Power</p>
@@ -323,21 +344,30 @@ export default function AppShell() {
                   </div>
                 </div>
               </div>
+            )}
 
-              {/* RIGHT: Ad placeholder */}
-              {/* TODO: substituir por integração real de ads (ex: AdSense, AdinPlay) quando definido */}
-              <div className="absolute right-4 top-4 z-10 hidden xl:block">
-                <div className="flex items-center justify-center border border-dashed border-line-dusk rounded-xl bg-bg-panel/40 w-[160px] h-[600px]">
-                  <span className="text-xs text-text-muted text-center px-2">
-                    Ad Space<br />160×600
-                  </span>
-                </div>
+            {/*
+              #phaser-root stays in the DOM at all times so the canvas is never
+              torn down; AppShell toggles its display per route.
+            */}
+            <div
+              id="phaser-root"
+              className="shrink-0 pointer-events-auto"
+              style={{ width: '960px', height: '640px' }}
+            />
+          </div>
+
+          {/* RIGHT: Ad placeholder */}
+          {/* TODO: substituir por integração real de ads (ex: AdSense, AdinPlay) quando definido */}
+          {isDashboard && user && (
+            <div className="absolute right-4 top-4 z-10 hidden xl:block">
+              <div className="flex items-center justify-center border border-dashed border-line-dusk rounded-xl bg-bg-panel/40 w-[160px] h-[600px]">
+                <span className="text-xs text-text-muted text-center px-2">
+                  Ad Space<br />160×600
+                </span>
               </div>
-            </>
+            </div>
           )}
-
-          {/* #phaser-root always in DOM — Phaser canvas attaches here at mount */}
-          <div id="phaser-root" className="absolute left-1/2 top-3 -translate-x-1/2 z-0" style={{ width: '960px', height: '640px' }} />
 
           {/* Non-dashboard routes */}
           {!isDashboard && (

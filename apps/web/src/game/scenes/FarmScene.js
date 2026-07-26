@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
-import { GRID, STATION, TRUNK_X, TOOLBAR_H } from '../layout.js';
+import { GRID, STATION, TRUNK_X, CABLE_EXIT_X, TOOLBAR_H } from '../layout.js';
 import { notifyPlacementChange, getCurrentUserId } from '../GameInstance.js';
 import { loadLayout, saveLayout } from '../farmApi.js';
 import {
@@ -979,18 +979,23 @@ export default class FarmScene extends Phaser.Scene {
     const trunk = this.drawStraightCable(TRUNK_X, top, TRUNK_X, bottom);
     this.cableLayer.add(trunk.objects);
 
+    /*
+      The run out of the canvas. The stats panel sits immediately to the left, at
+      the same connector height, so the wire appears to continue into it — the
+      HTML side draws the matching stub on its own edge.
+    */
     const stub = this.drawStraightCable(
       TRUNK_X,
       STATION.connectorY,
-      STATION.right,
+      CABLE_EXIT_X,
       STATION.connectorY
     );
     this.cableLayer.add(stub.objects);
 
-    // Terminal block where the wire meets the panel, so the join reads as a
-    // connection rather than a cable that happens to stop there.
+    // Insulator block at the crossing, so the boundary reads as a junction
+    // rather than a cable that happens to stop at the edge.
     this.cableLayer.add(
-      this.add.rectangle(STATION.right - 2, STATION.connectorY, 6, 8, CABLE.colour, 1)
+      this.add.rectangle(CABLE_EXIT_X + 2, STATION.connectorY, 5, 10, CABLE.colour, 1)
     );
 
     /*
@@ -1008,7 +1013,7 @@ export default class FarmScene extends Phaser.Scene {
       const stubLeg = this.drawStraightCable(
         TRUNK_X,
         STATION.connectorY,
-        STATION.right,
+        CABLE_EXIT_X,
         STATION.connectorY
       ).points;
 
