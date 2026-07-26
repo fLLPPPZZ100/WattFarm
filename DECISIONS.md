@@ -44,6 +44,21 @@
 | rare | 0.30% | 25 |
 | epic | 0.05% | 100 |
 
+## Profile identity
+- The nickname is Firebase's `displayName`, not a column of ours. Registration
+  already wrote it and the header already read it, so there is nothing to mirror
+  into Postgres and nothing that can drift out of sync.
+- Password changes always re-authenticate first. Firebase would demand it anyway
+  once the session is a few minutes old, and requiring the current password
+  means an unattended logged-in browser cannot be used to lock the owner out.
+- The password form is hidden for accounts without a `password` provider. Google
+  accounts have no password to change and `updatePassword` fails on them.
+- Account age gets coarser as it grows: minutes, then hours, then
+  `dias, horas`, then whole months, then whole years. Past a month the smaller
+  units are noise. See `lib/accountAge.js` — the arithmetic walks anniversaries
+  rather than dividing elapsed milliseconds by 30 days, which drifts around
+  month ends and leap years.
+
 ## Mining payout
 - Cron runs every 10 minutes
 - Fictitious budget: 50 VLT per network (solar/wind/hydro)

@@ -19,6 +19,9 @@ import {
   sendEmailVerification,
   signOut,
   updateProfile,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
   reload,
 } from 'firebase/auth';
 
@@ -310,6 +313,58 @@ export function AuthProvider({ children }) {
     return current.emailVerified;
   }, []);
 
+  /**
+   * Renames the account.
+   *
+   * The nickname is Firebase's `displayName` — the field registration already
+   * writes and the header already reads — so there is no column for it in our
+   * database and nothing to keep in sync. An empty value clears it, which makes
+   * the header fall back to the email.
+   *
+   * @param {string} displayName
+   * @returns {Promise<string>} the trimmed name that was stored
+   */
+  const updateDisplayName = useCallback(async (displayName) => {
+    const current = auth?.currentUser;
+    if (!current) throw new Error('You are not signed in.');
+
+    const trimmed = (displayName || '').trim();
+    await updateProfile(current, { displayName: trimmed || null });
+
+    // `updateProfile` mutates `current` in place, so React sees no new
+    // reference. Same reason refreshVerificationStatus bumps this.
+    setUserVersion((v) => v + 1);
+    return trimmed;
+  }, []);
+
+  /**
+   * Changes the password, re-authenticating first.
+   *
+   * Firebase rejects `updatePassword` with `auth/requires-recent-login` once the
+   * session is older than a few minutes, so a reauthentication would be needed
+   * eventually anyway. Doing it unconditionally also means the current password
+   * has to be proven — without that, anyone reaching an unattended logged-in
+   * browser could lock the owner out of their own account.
+   *
+   * @param {string} currentPassword
+   * @param {string} newPassword
+   */
+  const changePassword = useCallback(async (currentPassword, newPassword) => {
+    const current = auth?.currentUser;
+    if (!current) throw new Error('You are not signed in.');
+
+    if (!current.email) {
+      // Federated-only accounts have no password to change.
+      const error = new Error('This account has no password to change.');
+      error.code = 'auth/no-password-provider';
+      throw error;
+    }
+
+    const credential = EmailAuthProvider.credential(current.email, currentPassword);
+    await reauthenticateWithCredential(current, credential);
+    await updatePassword(current, newPassword);
+  }, []);
+
   const logout = useCallback(async () => {
     clearRetryTimer();
     syncGenerationRef.current += 1;
@@ -373,6 +428,13 @@ export function AuthProvider({ children }) {
       // Recomputed whenever `userVersion` changes, which is how a mutated
       // Firebase User propagates to consumers.
       emailVerified: user?.emailVerified ?? false,
+      /**
+       * Whether the account signs in with a password at all. Google-only
+       * accounts have no password to change, so the profile must not offer it —
+       * `updatePassword` would fail on them.
+       */
+      hasPasswordProvider:
+        user?.providerData?.some((entry) => entry?.providerId === 'password') ?? false,
 
       // Actions
       loginWithEmail,
@@ -383,6 +445,8 @@ export function AuthProvider({ children }) {
       refreshVerificationStatus,
       refreshAccount,
       patchAccount,
+      updateDisplayName,
+      changePassword,
       retryProvisioning,
       logout,
       getToken,
@@ -401,6 +465,8 @@ export function AuthProvider({ children }) {
       refreshVerificationStatus,
       refreshAccount,
       patchAccount,
+      updateDisplayName,
+      changePassword,
       retryProvisioning,
       logout,
       getToken,
