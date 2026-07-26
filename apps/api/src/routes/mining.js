@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
-import verifyAuth from '../middleware/verifyAuth.js';
+import { verifyAuth, verifyAuthStrict } from '../middleware/verifyAuth.js';
+import { configLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
 
@@ -24,12 +25,33 @@ router.get('/allocations', verifyAuth, async (req, res) => {
 // POST /api/mining/allocations — set mining allocation percentages
 // Body: { allocations: [{ network, percentage }] }
 // Total must sum to 100
-router.post('/allocations', verifyAuth, async (req, res) => {
+router.post('/allocations', configLimiter, verifyAuthStrict, async (req, res) => {
   try {
     const { allocations } = req.body;
 
     if (!Array.isArray(allocations) || allocations.length === 0) {
       return res.status(400).json({ error: 'Allocations array is required' });
+    }
+
+    // Cap the array length before iterating: an oversized payload would
+    // otherwise create one database row per element inside a transaction.
+    if (allocations.length > VALID_NETWORKS.length) {
+      return res.status(400).json({ error: 'Too many allocations submitted' });
+    }
+
+    // Reject non-numeric percentages before arithmetic, otherwise a string or
+    // null coerces and the sum check passes with nonsense values.
+    for (const a of allocations) {
+      if (typeof a?.percentage !== 'number' || !Number.isFinite(a.percentage)) {
+        return res.status(400).json({ error: 'Each allocation needs a numeric percentage' });
+      }
+    }
+
+    // Reject duplicate networks — two entries for "solar" could otherwise sum
+    // to 100 and silently overwrite each other.
+    const networks = allocations.map((a) => a.network);
+    if (new Set(networks).size !== networks.length) {
+      return res.status(400).json({ error: 'Duplicate networks are not allowed' });
     }
 
     // Validate networks and total

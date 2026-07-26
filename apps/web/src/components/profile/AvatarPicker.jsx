@@ -1,25 +1,7 @@
 import { useState } from 'react';
 import avatars, { getAvatarById, isVltAvatar, getAvatarPrice } from '../../data/avatars';
-import { auth } from '../../firebase';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-async function fetchWithAuth(url, options = {}) {
-  const user = auth.currentUser;
-  if (!user) throw new Error('Not authenticated');
-  const token = await user.getIdToken();
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...options.headers,
-    },
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data;
-}
+import { api } from '../../lib/apiClient.js';
+import { friendlyAuthError } from '../../lib/authErrors.js';
 
 export default function AvatarPicker({ unlockedAvatars, activeAvatarId, vltBalance, onAvatarChanged }) {
   const [loading, setLoading] = useState(null); // avatarId being processed
@@ -32,13 +14,10 @@ export default function AvatarPicker({ unlockedAvatars, activeAvatarId, vltBalan
     setLoading(avatarId);
 
     try {
-      await fetchWithAuth(`${API_URL}/api/users/me/avatar`, {
-        method: 'PATCH',
-        body: JSON.stringify({ avatarId }),
-      });
+      await api.patch('/api/users/me/avatar', { avatarId });
       onAvatarChanged(avatarId);
     } catch (err) {
-      setError(err.message);
+      setError(friendlyAuthError(err));
     } finally {
       setLoading(null);
     }
@@ -49,12 +28,12 @@ export default function AvatarPicker({ unlockedAvatars, activeAvatarId, vltBalan
     setLoading(avatarId);
 
     try {
-      const data = await fetchWithAuth(`${API_URL}/api/users/me/avatars/${avatarId}/unlock`, {
-        method: 'POST',
-      });
+      const data = await api.post(
+        `/api/users/me/avatars/${encodeURIComponent(avatarId)}/unlock`
+      );
       onAvatarChanged(data.avatarId);
     } catch (err) {
-      setError(err.message);
+      setError(friendlyAuthError(err));
     } finally {
       setLoading(null);
     }

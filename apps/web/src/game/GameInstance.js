@@ -3,6 +3,7 @@ import { BootScene, FarmScene } from './scenes/index.js';
 
 var game = null;
 var onPlacementChange = null;
+var currentUserId = null;
 
 export function setPlacementCallback(fn) {
   onPlacementChange = fn;
@@ -12,8 +13,41 @@ export function notifyPlacementChange(solarPlaced, mountPlaced) {
   if (onPlacementChange) onPlacementChange(solarPlaced, mountPlaced);
 }
 
-export function boot() {
-  if (game) return;
+/**
+ * The uid the running game belongs to.
+ *
+ * FarmScene uses this to namespace its saved layout in localStorage. Without
+ * it, every account on a browser shared one `wattfarm_placement` key, so the
+ * next player to log in inherited the previous player's farm.
+ *
+ * @returns {string | null}
+ */
+export function getCurrentUserId() {
+  return currentUserId;
+}
+
+/**
+ * Boots the Phaser game for a specific user.
+ *
+ * Idempotent for the same uid, so React re-renders will not recreate the
+ * canvas. When the uid changes the previous instance is torn down first,
+ * guaranteeing no state carries across accounts.
+ *
+ * @param {string} userId Firebase uid of the signed-in player
+ */
+export function boot(userId) {
+  if (!userId) {
+    console.warn('[game] boot() called without a userId — refusing to start');
+    return;
+  }
+
+  if (game) {
+    if (currentUserId === userId) return; // already running for this player
+    shutdown(); // different account: start clean
+  }
+
+  currentUserId = userId;
+
   game = new Phaser.Game({
     type: Phaser.CANVAS,
     parent: 'phaser-root',
@@ -24,6 +58,27 @@ export function boot() {
     antialias: false,
     scene: [BootScene, FarmScene],
   });
+}
+
+/**
+ * Destroys the running game and clears the associated identity.
+ * Called on logout and when the mounting component unmounts.
+ */
+export function shutdown() {
+  if (!game) {
+    currentUserId = null;
+    return;
+  }
+
+  try {
+    // `false` for removeCanvas: React owns the #phaser-root element.
+    game.destroy(true, false);
+  } catch (err) {
+    console.warn('[game] error during shutdown:', err);
+  } finally {
+    game = null;
+    currentUserId = null;
+  }
 }
 
 export function sync(assets, mountCount, solarCount) {

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
-import { notifyPlacementChange } from '../GameInstance.js';
+import { notifyPlacementChange, getCurrentUserId } from '../GameInstance.js';
 
 const TILE = 96;
 const GRID_OFFSET_X = 96;
@@ -412,18 +412,52 @@ export default class FarmScene extends Phaser.Scene {
   }
 
   /* ── SAVE / RESTORE ── */
+  /**
+   * Storage key for the current player's farm layout.
+   *
+   * Scoped by Firebase uid: the previous single `wattfarm_placement` key was
+   * shared by every account on the browser, so logging out and back in as
+   * someone else restored the other player's farm.
+   *
+   * Returns null when no user is known, which disables persistence entirely
+   * rather than risking a write to a shared key.
+   */
+  placementStorageKey() {
+    const uid = getCurrentUserId();
+    return uid ? `wattfarm:placement:${uid}` : null;
+  }
+
   savePlacement() {
+    const key = this.placementStorageKey();
+    if (!key) return;
+
     const data = this.entities.map(function (e) {
       const col = Math.floor((e.x - GRID_OFFSET_X) / TILE);
       const row = Math.floor((e.y - GRID_OFFSET_Y) / TILE);
       return { type: e.getData('entityType'), col: col, row: row };
     });
-    try { localStorage.setItem('wattfarm_placement', JSON.stringify(data)); } catch (e) {}
+
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {
+      // Quota exceeded or storage disabled (private browsing). The farm still
+      // works for this session; it just will not survive a reload.
+      console.warn('[game] could not save placement:', e?.name || e);
+    }
   }
 
   restorePlacement() {
+    const key = this.placementStorageKey();
+    if (!key) return;
+
     let data;
-    try { data = JSON.parse(localStorage.getItem('wattfarm_placement')); } catch (e) {}
+    try {
+      data = JSON.parse(localStorage.getItem(key));
+    } catch (e) {
+      // Corrupted entry — discard it so the player is not stuck with a farm
+      // that can never load.
+      try { localStorage.removeItem(key); } catch { /* storage unavailable */ }
+    }
     if (!data || !Array.isArray(data)) return;
 
     const self = this;

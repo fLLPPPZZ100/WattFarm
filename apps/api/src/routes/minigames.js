@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
-import verifyAuth from '../middleware/verifyAuth.js';
+import { verifyAuth, verifyAuthStrict, requireVerifiedEmail } from '../middleware/verifyAuth.js';
+import { minigameLimiter } from '../middleware/rateLimit.js';
 import {
   getCooldownTier,
   getCooldownRemainingMs,
@@ -59,7 +60,12 @@ router.get('/status', verifyAuth, async (req, res) => {
 });
 
 // POST /api/minigames/:game/play — play a minigame
-router.post('/:game/play', verifyAuth, async (req, res) => {
+router.post(
+  '/:game/play',
+  minigameLimiter,
+  verifyAuthStrict,
+  requireVerifiedEmail,
+  async (req, res) => {
   try {
     const { game } = req.params;
     if (!VALID_GAMES.includes(game)) {

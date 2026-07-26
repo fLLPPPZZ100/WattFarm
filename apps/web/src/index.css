@@ -11,4 +11,146 @@
     image-rendering: crisp-edges;
     image-rendering: pixelated;
   }
+
+  /* Silkscreen only ships a small set of glyphs and looks muddy when the
+     browser hints it. Turning hinting off keeps the pixel grid intact. */
+  .font-display {
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+    font-smooth: never;
+  }
+
+  /* Respect users who ask for less motion: the CRT/scanline and float
+     animations are decorative, so they are simply switched off. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* ── Pixel surfaces ─────────────────────────────────────────────
+     A 2px hard border plus offset hard shadow reads as a bevelled 8-bit
+     panel. No border-radius anywhere: rounded corners break the illusion. */
+  .pixel-panel {
+    @apply relative border-2 border-line-dusk bg-bg-panel shadow-pixel-lg;
+    border-radius: 0;
+  }
+
+  .pixel-panel-inset {
+    @apply border-2 bg-bg-abyss;
+    border-color: theme('colors.bevel-dark') theme('colors.bevel-light')
+      theme('colors.bevel-light') theme('colors.bevel-dark');
+    border-radius: 0;
+  }
+
+  /* ── Pixel inputs ───────────────────────────────────────────── */
+  .pixel-input {
+    @apply w-full bg-bg-abyss border-2 px-3 py-2.5 font-mono text-sm text-text-primary
+           outline-none transition-none;
+    border-radius: 0;
+    /* Sunken bevel: dark top/left, light bottom/right. */
+    border-color: theme('colors.bevel-dark') theme('colors.bevel-light')
+      theme('colors.bevel-light') theme('colors.bevel-dark');
+  }
+
+  .pixel-input::placeholder {
+    @apply text-text-muted/50;
+  }
+
+  .pixel-input:focus {
+    @apply border-accent-watt shadow-glow-watt;
+  }
+
+  .pixel-input[aria-invalid='true'] {
+    @apply border-danger-crt shadow-glow-danger;
+  }
+
+  /* ── Pixel buttons ──────────────────────────────────────────────
+     The press effect is a 2px translate that consumes the shadow, so the
+     button physically sinks. steps() timing keeps it snappy, not springy. */
+  .pixel-btn {
+    @apply relative inline-flex items-center justify-center gap-2 border-2 px-4 py-2.5
+           font-display text-[11px] uppercase tracking-widest shadow-pixel;
+    border-radius: 0;
+    transition: transform 60ms steps(2, end), box-shadow 60ms steps(2, end),
+      filter 90ms steps(2, end);
+  }
+
+  .pixel-btn:active:not(:disabled) {
+    transform: translate(4px, 4px);
+    box-shadow: none;
+  }
+
+  .pixel-btn:disabled {
+    @apply cursor-not-allowed opacity-50;
+    transform: none;
+  }
+
+  .pixel-btn-primary {
+    @apply pixel-btn bg-accent-watt text-bg-abyss;
+    border-color: #f7d089 #a97f24 #a97f24 #f7d089;
+  }
+
+  .pixel-btn-primary:hover:not(:disabled) {
+    filter: brightness(1.12);
+  }
+
+  .pixel-btn-ghost {
+    @apply pixel-btn border-line-dusk bg-bg-panel text-text-primary;
+  }
+
+  .pixel-btn-ghost:hover:not(:disabled) {
+    @apply border-accent-watt/60 bg-bg-abyss text-accent-watt;
+  }
+
+  /* Focus ring that survives the pixel aesthetic — hard offset outline. */
+  .pixel-focus:focus-visible {
+    outline: 2px solid theme('colors.accent-current');
+    outline-offset: 2px;
+  }
+
+  /* ── CRT / scanline overlay ─────────────────────────────────────
+     Pure CSS: repeating 1px dark bands over a subtle vignette. Sits above
+     content with pointer-events disabled so it never blocks interaction. */
+  .crt-overlay {
+    @apply pointer-events-none absolute inset-0;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.16) 0px,
+      rgba(0, 0, 0, 0.16) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    background-size: 100% 3px;
+    mix-blend-mode: multiply;
+  }
+
+  /* Pixel grid backdrop used behind the login panel. */
+  .pixel-grid {
+    background-image: linear-gradient(
+        to right,
+        rgba(42, 59, 77, 0.35) 1px,
+        transparent 1px
+      ),
+      linear-gradient(to bottom, rgba(42, 59, 77, 0.35) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Chunky segmented progress/strength bar. */
+  .pixel-meter {
+    @apply flex gap-1;
+  }
+
+  .pixel-meter-seg {
+    @apply h-2 flex-1 border-2;
+    border-radius: 0;
+    border-color: theme('colors.bevel-dark');
+    background-color: theme('colors.bg-abyss');
+  }
 }

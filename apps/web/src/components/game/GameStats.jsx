@@ -1,25 +1,26 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { usePlacementStore } from '../../store/placementStore';
 import { useAuth } from '../../context/AuthContext';
-import { auth } from '../../firebase';
+import { api } from '../../lib/apiClient.js';
 import vltCoinImg from '../../assets/coins/vlt-coin.png';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const CYCLE_SECONDS = 600; // 10 minutes
 
 function fmt(n) { return (n || 0).toFixed(1); }
 
+/**
+ * Payout history for the toast notification.
+ *
+ * Returns null instead of throwing: this runs on a 30s poll purely to detect
+ * new payouts, so a transient failure should be invisible to the player. The
+ * shared client still handles session expiry globally.
+ */
 async function fetchHistory() {
-  const user = auth.currentUser;
-  if (!user) return null;
   try {
-    const token = await user.getIdToken();
-    const res = await fetch(API_URL + '/api/mining/history', {
-      headers: { Authorization: 'Bearer ' + token },
-    });
-    if (res.ok) return res.json();
-  } catch (e) {}
-  return null;
+    return await api.get('/api/mining/history');
+  } catch {
+    return null;
+  }
 }
 
 export default function GameStats() {

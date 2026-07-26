@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useAssetsStore } from '../../store/assetsStore';
-import AuthModal from '../auth/AuthModal';
-import { boot as bootGame, sync as syncGame, setPlacementCallback } from '../../game/GameInstance.js';
+import { useAssetsStore, resetAssetsStore } from '../../store/assetsStore';
+import EmailVerificationBanner from '../auth/EmailVerificationBanner';
+import {
+  boot as bootGame,
+  sync as syncGame,
+  shutdown as shutdownGame,
+  setPlacementCallback,
+} from '../../game/GameInstance.js';
 import { usePlacementStore } from '../../store/placementStore.js';
 import vltCoinImg from '../../assets/coins/vlt-coin.png';
 import btcCoinImg from '../../assets/coins/btc-coin.png';
@@ -35,7 +40,6 @@ export default function AppShell() {
   const { user, logout } = useAuth();
   const { vltBalance, assets, fetchMining } = useAssetsStore();
   const { placedSolar, placedMount } = usePlacementStore();
-  const [modalOpen, setModalOpen] = useState(false);
   const [activeCurrency, setActiveCurrency] = useState('VLT');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [countdown, setCountdown] = useState(CYCLE_SECONDS);
@@ -49,12 +53,24 @@ export default function AppShell() {
   var balances = { VLT: vltBalance, BTC: btcBalance, ETH: ethBalance, SOL: solBalance, TRX: trxBalance };
   var active = CURRENCIES.find(function (c) { return c.id === activeCurrency; }) || CURRENCIES[0];
 
+  /**
+   * The game is booted per authenticated user so its saved layout is scoped to
+   * that account. Previously it booted once globally and read an unscoped
+   * localStorage key, which meant the next person to log in on the same browser
+   * saw the previous player's farm.
+   */
   useEffect(function () {
-    bootGame();
+    if (!user) return undefined;
+
+    bootGame(user.uid);
     setPlacementCallback(function (solarPlaced, mountPlaced) {
       usePlacementStore.setState({ placedSolar: solarPlaced, placedMount: mountPlaced });
     });
-  }, []);
+
+    return function () {
+      shutdownGame();
+    };
+  }, [user]);
   useEffect(function () {
     if (!user) return;
     fetchMining();
@@ -90,6 +106,17 @@ export default function AppShell() {
   var activeSolar = placedSolar || 0;
   var totalPower = activeSolar * 1;
   var blockReward = totalPower * 0.05;
+
+  /**
+   * Clears all per-user client state before signing out. Without this the next
+   * account to log in on the same browser briefly saw the previous player's
+   * balance and inventory, because the zustand stores outlive the session.
+   */
+  function handleLogout() {
+    resetAssetsStore();
+    usePlacementStore.setState({ placedSolar: 0, placedMount: 0 });
+    logout();
+  }
 
   var isDashboard = location.pathname === '/';
   // Phaser root: always in DOM for canvas persistence; show/hide via display
@@ -127,11 +154,7 @@ export default function AppShell() {
           </nav>
         )}
         <div className="px-3 py-3 border-t border-line-dusk">
-          {user ? (
-            <button onClick={logout} className="w-full text-left px-3 py-2 rounded-lg text-sm text-text-muted hover:text-red-400 hover:bg-red-400/5 transition-all border border-transparent hover:border-red-400/20">Log out</button>
-          ) : (
-            <button onClick={function () { setModalOpen(true); }} className="w-full bg-accent-watt text-bg-abyss font-semibold px-4 py-2 rounded-lg text-sm hover:brightness-110 transition-all">Log in</button>
-          )}
+          <button onClick={handleLogout} className="w-full text-left px-3 py-2 rounded-lg text-sm text-text-muted hover:text-red-400 hover:bg-red-400/5 transition-all border border-transparent hover:border-red-400/20">Log out</button>
         </div>
       </aside>
 
@@ -207,11 +230,11 @@ export default function AppShell() {
                   {user.displayName || user.email}
                 </span>
               </div>
-            ) : (
-              <button onClick={function () { setModalOpen(true); }} className="bg-accent-watt text-bg-abyss font-semibold px-5 py-2.5 rounded-lg text-sm hover:brightness-110 transition-all ml-auto">Log in</button>
-            )}
+            ) : null}
           </div>
         </header>
+
+        <EmailVerificationBanner />
 
         <div className="flex-1 relative overflow-hidden">
           {/* 3-column layout: power panel (left) + game viewport (center) + ad space (right) */}
@@ -261,7 +284,6 @@ export default function AppShell() {
         </div>
       </div>
 
-      <AuthModal open={modalOpen} onClose={function () { setModalOpen(false); }} />
     </div>
   );
 }

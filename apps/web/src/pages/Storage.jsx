@@ -37,16 +37,7 @@ export default function Storage() {
     return function () { clearInterval(pollingRef.current); };
   }, [user, fetchMining]);
 
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center py-32">
-        <div className="text-center">
-          <p className="font-display text-xl text-text-muted tracking-wide">STORAGE</p>
-          <p className="text-text-muted text-sm mt-2">Log in to view your inventory.</p>
-        </div>
-      </div>
-    );
-  }
+  // No unauthenticated branch: RequireAuth gates this route.
 
   // Build owned map from API data (type -> quantity)
   var ownedMap = {};
