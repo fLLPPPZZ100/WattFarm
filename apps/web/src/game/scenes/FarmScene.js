@@ -10,52 +10,193 @@ const GRID_COLS = 8;
 const GRID_ROWS_START = 2; // skip sky rows
 const GRID_ROWS_END = 5;
 
+/**
+ * Mount definitions, with slot offsets measured from the sprite artwork.
+ *
+ * How the numbers were derived (all values in source pixels):
+ *
+ *   panel-1.png       64x64   top surface spans x 17..60, centre 38.5 → +6.5 from canvas centre
+ *   mount-1.png       64x64   top surface spans x 17..60, centre 38.5 → +6.5 from canvas centre
+ *   mount-2.png      128x64   top surface spans x 27..114 (width 88 = 2 x 44)
+ *                             left bay  27..70  centre 48.5 → -15.5 from canvas centre
+ *                             right bay 71..114 centre 92.5 → +28.5 from canvas centre
+ *
+ * The panel and the single mount share an identical footprint, so a panel on a
+ * single mount needs no offset at all — it is drawn at the same point and simply
+ * has to render above the frame. For the double mount, aligning the panel's own
+ * +6.5 surface centre with each bay centre gives -15.5 - 6.5 = -22 and
+ * 28.5 - 6.5 = +22.
+ *
+ * `cells` is how many grid columns the mount reserves. The double sprite is
+ * 128px wide inside a 96px tile, so treating it as one cell made two adjacent
+ * doubles overlap by 32px — which is what made one appear to sit on top of the
+ * other. Reserving two columns removes the overlap entirely.
+ */
+const MOUNT_TYPES = {
+  mount_single: {
+    texture: 'mount_single',
+    cells: 1,
+    label: 'Mount 1x',
+    slots: [{ dx: 0, dy: 0 }],
+  },
+  mount_double: {
+    texture: 'mount_double',
+    cells: 2,
+    label: 'Mount 2x',
+    slots: [
+      { dx: -22, dy: 0 },
+      { dx: 22, dy: 0 },
+    ],
+  },
+};
+
+/** Panels are children of their mount, so only mounts need a depth. */
+const DEPTH_BASE = 10;
+
 export default class FarmScene extends Phaser.Scene {
   constructor() {
     super({ key: 'FarmScene' });
-    this.entities = [];
+
+    /** @type {Phaser.GameObjects.Container[]} mount containers, each owning its panels */
+    this.mounts = [];
+    /** @type {Map<string, Phaser.GameObjects.Container>} "col,row" → mount occupying that cell */
+    this.occupancy = new Map();
+
     this.editMode = false;
     this.editGrid = [];
     this.editAddButtons = [];
-    this.placedCount = { solar: 0, mount_single: 0, mount_double: 0 };
+
     this.mountsOwned = 0;
     this.doubleMountsOwned = 0;
     this.solarsOwned = 0;
+
     this.popupContainer = null;
   }
 
   create() {
-    // Background
     const bgImg = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'bg_game');
     bgImg.setDisplaySize(GAME_WIDTH, GAME_HEIGHT);
+
     this.entityLayer = this.add.container(0, 0).setDepth(10);
 
-    // Edit mode toggle button (bottom bar)
     this.createEditButton();
-
-    // Restore saved placement
     this.restorePlacement();
 
     this.game.events.emit('ready');
   }
 
-  /* ── EDIT MODE TOGGLE BUTTON ── */
+  /* ══ GEOMETRY ══ */
+
+  cellCentreX(col) {
+    return GRID_OFFSET_X + col * TILE + TILE / 2;
+  }
+
+  cellCentreY(row) {
+    return GRID_OFFSET_Y + row * TILE + TILE / 2;
+  }
+
+  /**
+   * Where a mount's container sits.
+   *
+   * A single mount is centred on its cell. A double spans two columns, so it is
+   * centred on the boundary between them — otherwise its two bays would sit
+   * off-centre over the reserved area.
+   */
+  mountPosition(type, col, row) {
+    const def = MOUNT_TYPES[type];
+    const x = this.cellCentreX(col) + ((def.cells - 1) * TILE) / 2;
+    return { x, y: this.cellCentreY(row) };
+  }
+
+  /**
+   * Render order.
+   *
+   * Row is the primary axis: rows further down the screen are nearer the viewer
+   * and must draw on top. Within a row, lower columns draw on top, so a mount
+   * is never covered by its neighbour to the right — the previous code used the
+   * column as the primary axis, which produced exactly that artefact.
+   */
+  mountDepth(col, row) {
+    return DEPTH_BASE + row * 100 + (GRID_COLS - col);
+  }
+
+  cellKey(col, row) {
+    return `${col},${row}`;
+  }
+
+  /** Cells a mount of `type` anchored at (col,row) would reserve. */
+  cellsFor(type, col, row) {
+    const def = MOUNT_TYPES[type];
+    const cells = [];
+    for (let i = 0; i < def.cells; i += 1) cells.push({ col: col + i, row });
+    return cells;
+  }
+
+  /** True when every cell the mount needs is inside the grid and free. */
+  canPlaceAt(type, col, row) {
+    const cells = this.cellsFor(type, col, row);
+    return cells.every(
+      (cell) =>
+        cell.col >= 0 &&
+        cell.col < GRID_COLS &&
+        cell.row >= GRID_ROWS_START &&
+        cell.row <= GRID_ROWS_END &&
+        !this.occupancy.has(this.cellKey(cell.col, cell.row))
+    );
+  }
+
+  mountAt(col, row) {
+    return this.occupancy.get(this.cellKey(col, row)) || null;
+  }
+
+  /* ══ COUNTS ══ */
+
+  countPlaced(type) {
+    return this.mounts.filter((m) => m.getData('mountType') === type).length;
+  }
+
+  countPlacedPanels() {
+    return this.mounts.reduce(
+      (total, mount) => total + mount.getData('panels').filter(Boolean).length,
+      0
+    );
+  }
+
+  availableMounts(type) {
+    const owned = type === 'mount_double' ? this.doubleMountsOwned : this.mountsOwned;
+    return owned - this.countPlaced(type);
+  }
+
+  availablePanels() {
+    return this.solarsOwned - this.countPlacedPanels();
+  }
+
+  /* ══ EDIT MODE ══ */
+
   createEditButton() {
     const y = GAME_HEIGHT - TOOLBAR_H / 2;
-    const bg = this.add.rectangle(GAME_WIDTH / 2, y, GAME_WIDTH, TOOLBAR_H, 0x131f2e, 0.9)
-      .setDepth(80).setStrokeStyle(1, 0x2A3B4D);
+    this.add
+      .rectangle(GAME_WIDTH / 2, y, GAME_WIDTH, TOOLBAR_H, 0x131f2e, 0.9)
+      .setDepth(80)
+      .setStrokeStyle(1, 0x2a3b4d);
 
-    const self = this;
-    this.editBtn = this.add.text(GAME_WIDTH / 2, y, 'EDIT', {
-      fontFamily: '"Silkscreen", cursive', fontSize: '13px', color: '#F2B84B',
-      backgroundColor: '#1A1A2A', padding: { x: 16, y: 6 },
-    }).setOrigin(0.5).setDepth(81).setInteractive({ useHandCursor: true });
+    this.editBtn = this.add
+      .text(GAME_WIDTH / 2, y, 'EDIT', {
+        fontFamily: '"Silkscreen", cursive',
+        fontSize: '13px',
+        color: '#F2B84B',
+        backgroundColor: '#1A1A2A',
+        padding: { x: 16, y: 6 },
+      })
+      .setOrigin(0.5)
+      .setDepth(81)
+      .setInteractive({ useHandCursor: true });
 
-    this.editBtn.on('pointerover', function () { self.editBtn.setColor('#FFFFFF'); });
-    this.editBtn.on('pointerout', function () {
-      self.editBtn.setColor(self.editMode ? '#5FD4C4' : '#F2B84B');
-    });
-    this.editBtn.on('pointerdown', function () { self.toggleEditMode(); });
+    this.editBtn.on('pointerover', () => this.editBtn.setColor('#FFFFFF'));
+    this.editBtn.on('pointerout', () =>
+      this.editBtn.setColor(this.editMode ? '#5FD4C4' : '#F2B84B')
+    );
+    this.editBtn.on('pointerdown', () => this.toggleEditMode());
   }
 
   toggleEditMode() {
@@ -73,43 +214,46 @@ export default class FarmScene extends Phaser.Scene {
     }
   }
 
-  /* ── EDIT GRID ── */
   showEditGrid() {
     this.hideEditGrid();
-    const self = this;
 
-    for (let r = GRID_ROWS_START; r <= GRID_ROWS_END; r++) {
-      for (let c = 0; c < GRID_COLS; c++) {
-        const cx = GRID_OFFSET_X + c * TILE + TILE / 2;
-        const cy = GRID_OFFSET_Y + r * TILE + TILE / 2;
+    for (let row = GRID_ROWS_START; row <= GRID_ROWS_END; row += 1) {
+      for (let col = 0; col < GRID_COLS; col += 1) {
+        const cx = this.cellCentreX(col);
+        const cy = this.cellCentreY(row);
 
-        // Grid cell outline — subtle, thin lines
-        const cell = this.add.rectangle(cx, cy, TILE, TILE, 0x0b1622, 0.25)
-          .setDepth(5).setStrokeStyle(0.5, 0x2A3B4D, 0.15);
-        this.editGrid.push(cell);
+        this.editGrid.push(
+          this.add
+            .rectangle(cx, cy, TILE, TILE, 0x0b1622, 0.25)
+            .setDepth(5)
+            .setStrokeStyle(0.5, 0x2a3b4d, 0.15)
+        );
 
-        // Only mount entities determine occupation
-        const occupied = this.entities.some(function (e) {
-          const ec = Math.floor((e.x - GRID_OFFSET_X) / TILE);
-          const er = Math.floor((e.y - GRID_OFFSET_Y) / TILE);
-          return ec === c && er === r && (e.getData('entityType') === 'mount_single' || e.getData('entityType') === 'mount_double');
+        if (this.mountAt(col, row)) continue;
+
+        const addBtn = this.add
+          .text(cx, cy, 'ADD', {
+            fontFamily: '"Silkscreen", cursive',
+            fontSize: '10px',
+            color: '#F2B84B',
+            backgroundColor: 'rgba(19, 31, 46, 0.85)',
+            padding: { x: 10, y: 6 },
+          })
+          .setOrigin(0.5)
+          .setDepth(6)
+          .setInteractive({ useHandCursor: true });
+
+        addBtn.on('pointerover', () => {
+          addBtn.setColor('#FFFFFF');
+          addBtn.setBackgroundColor('rgba(42, 42, 58, 0.9)');
         });
+        addBtn.on('pointerout', () => {
+          addBtn.setColor('#F2B84B');
+          addBtn.setBackgroundColor('rgba(19, 31, 46, 0.85)');
+        });
+        addBtn.on('pointerdown', () => this.showAddPopup(col, row));
 
-        if (!occupied) {
-          // ADD button — pixel-art styled
-          const addBtn = this.add.text(cx, cy, 'ADD', {
-            fontFamily: '"Silkscreen", cursive', fontSize: '10px', color: '#F2B84B',
-            backgroundColor: 'rgba(19, 31, 46, 0.85)', padding: { x: 10, y: 6 },
-          }).setOrigin(0.5).setDepth(6).setInteractive({ useHandCursor: true });
-
-          addBtn.on('pointerover', function () { addBtn.setColor('#FFFFFF'); addBtn.setBackgroundColor('rgba(42, 42, 58, 0.9)'); });
-          addBtn.on('pointerout', function () { addBtn.setColor('#F2B84B'); addBtn.setBackgroundColor('rgba(19, 31, 46, 0.85)'); });
-          addBtn.on('pointerdown', (function (col, row) {
-            return function () { self.showAddPopup(col, row); };
-          })(c, r));
-
-          this.editAddButtons.push(addBtn);
-        }
+        this.editAddButtons.push(addBtn);
       }
     }
   }
@@ -121,306 +265,388 @@ export default class FarmScene extends Phaser.Scene {
     this.editAddButtons = [];
   }
 
-  /* ── ADD POPUP (in edit mode on empty cell) ── */
+  refreshEditGrid() {
+    if (!this.editMode) return;
+    this.hideEditGrid();
+    this.showEditGrid();
+  }
+
+  /* ══ POPUP HELPERS ══ */
+
+  hidePopup() {
+    if (this.popupContainer) {
+      this.popupContainer.destroy();
+      this.popupContainer = null;
+    }
+  }
+
+  /**
+   * Builds a popup shell and returns it plus a cursor for stacking rows.
+   * Height is passed in because the caller knows how many rows it will add.
+   */
+  createPopup(title, width, height, anchorY) {
+    this.hidePopup();
+
+    const menu = this.add.container(GAME_WIDTH / 2, Math.max(70, anchorY)).setDepth(200);
+
+    const bg = this.add
+      .rectangle(0, 0, width, height, 0x131f2e, 0.96)
+      .setStrokeStyle(1, 0x8b7355);
+    // Swallow clicks so tapping the panel does not fall through to the scene.
+    bg.setInteractive();
+    bg.on('pointerdown', () => {});
+    menu.add(bg);
+
+    menu.add(
+      this.add
+        .text(0, -height / 2 + 16, title, {
+          fontFamily: '"Silkscreen", cursive',
+          fontSize: '13px',
+          color: '#F2B84B',
+        })
+        .setOrigin(0.5)
+    );
+
+    menu.add(this.add.rectangle(0, -height / 2 + 32, width - 20, 1, 0x8b7355, 0.3));
+
+    const close = this.add
+      .text(width / 2 - 14, -height / 2 + 14, '✕', {
+        fontFamily: 'Inter, sans-serif',
+        fontSize: '14px',
+        color: '#7C8CA0',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    close.on('pointerover', () => close.setColor('#E8EDF2'));
+    close.on('pointerout', () => close.setColor('#7C8CA0'));
+    close.on('pointerdown', () => this.hidePopup());
+    menu.add(close);
+
+    this.popupContainer = menu;
+    return menu;
+  }
+
+  /** Adds a clickable row to a popup. `enabled: false` renders it greyed out. */
+  addPopupButton(menu, { x = 0, y, label, enabled = true, tone = 'default', onClick }) {
+    const colours = {
+      default: { idle: '#F2B84B', bg: '#1A1A2A', hover: '#FFFFFF' },
+      danger: { idle: '#E8EDF2', bg: '#2A1A1A', hover: '#FF6B6B' },
+    };
+    const palette = colours[tone] || colours.default;
+
+    const btn = this.add
+      .text(x, y, label, {
+        fontFamily: 'Inter, sans-serif',
+        fontSize: '12px',
+        color: enabled ? palette.idle : '#5A6675',
+        backgroundColor: enabled ? palette.bg : '#141A21',
+        padding: { x: 10, y: 5 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: enabled });
+
+    if (enabled) {
+      btn.on('pointerover', () => btn.setColor(palette.hover));
+      btn.on('pointerout', () => btn.setColor(palette.idle));
+      btn.on('pointerdown', () => onClick());
+    }
+
+    menu.add(btn);
+    return btn;
+  }
+
+  /* ══ PLACE MOUNT ══ */
+
   showAddPopup(col, row) {
-    this.hidePopup();
-    const x = GRID_OFFSET_X + col * TILE + TILE / 2;
-    const y = GRID_OFFSET_Y + row * TILE + TILE / 2;
-    const popY = Math.max(60, y - 60);
-    const self = this;
+    const anchorY = this.cellCentreY(row) - 70;
+    const menu = this.createPopup('Place Mount', 280, 108, anchorY);
 
-    const singleAvail = this.mountsOwned - (this.placedCount['mount_single'] || 0);
-    const doubleAvail = this.doubleMountsOwned - (this.placedCount['mount_double'] || 0);
+    const singleAvail = this.availableMounts('mount_single');
+    const doubleAvail = this.availableMounts('mount_double');
 
-    const W = 260;
-    const H = 100;
-    const menu = this.add.container(GAME_WIDTH / 2, popY).setDepth(200);
-    const bg = this.add.rectangle(0, 0, W, H, 0x131f2e, 0.95).setStrokeStyle(1, 0x8B7355);
-    bg.setInteractive(); bg.on('pointerdown', function () {});
-    menu.add(bg);
+    // A double needs the neighbouring column as well, so it can be unavailable
+    // purely for lack of room — worth saying explicitly rather than just
+    // greying the button out.
+    const doubleFits = this.canPlaceAt('mount_double', col, row);
 
-    // Title
-    const title = this.add.text(0, -H / 2 + 18, 'Place Mount', {
-      fontFamily: '"Silkscreen", cursive', fontSize: '14px', color: '#F2B84B',
-    }).setOrigin(0.5);
-    menu.add(title);
+    this.addPopupButton(menu, {
+      x: -70,
+      y: 8,
+      label: `Mount 1x  (${Math.max(0, singleAvail)})`,
+      enabled: singleAvail > 0,
+      onClick: () => {
+        this.placeMount('mount_single', col, row);
+        this.hidePopup();
+      },
+    });
 
-    // Divider
-    menu.add(this.add.rectangle(0, -H / 2 + 36, W - 20, 1, 0x8B7355, 0.3));
+    this.addPopupButton(menu, {
+      x: 70,
+      y: 8,
+      label: `Mount 2x  (${Math.max(0, doubleAvail)})`,
+      enabled: doubleAvail > 0 && doubleFits,
+      onClick: () => {
+        this.placeMount('mount_double', col, row);
+        this.hidePopup();
+      },
+    });
 
-    // Single mount button
-    const singleLabel = '🔩 Mount 1x  (' + singleAvail + ')';
-    const sBtn = this.add.text(-W / 4, 10, singleLabel, {
-      fontFamily: 'Inter, sans-serif', fontSize: '12px',
-      color: singleAvail > 0 ? '#F2B84B' : '#7C8CA0',
-      backgroundColor: '#1A1A2A', padding: { x: 12, y: 6 },
-    }).setOrigin(0.5);
-    sBtn.setInteractive({ useHandCursor: singleAvail > 0 });
-    if (singleAvail > 0) {
-      sBtn.on('pointerover', function () { sBtn.setColor('#FFFFFF'); sBtn.setBackgroundColor('#2A2A3A'); });
-      sBtn.on('pointerout', function () { sBtn.setColor('#F2B84B'); sBtn.setBackgroundColor('#1A1A2A'); });
-      sBtn.on('pointerdown', function () { self.placeMountOn(col, row, 'single'); self.hidePopup(); });
-    }
-    menu.add(sBtn);
-
-    // Double mount button
-    const doubleLabel = '🔩 Mount 2x  (' + doubleAvail + ')';
-    const dBtn = this.add.text(W / 4, 10, doubleLabel, {
-      fontFamily: 'Inter, sans-serif', fontSize: '12px',
-      color: doubleAvail > 0 ? '#F2B84B' : '#7C8CA0',
-      backgroundColor: '#1A1A2A', padding: { x: 12, y: 6 },
-    }).setOrigin(0.5);
-    dBtn.setInteractive({ useHandCursor: doubleAvail > 0 });
-    if (doubleAvail > 0) {
-      dBtn.on('pointerover', function () { dBtn.setColor('#FFFFFF'); dBtn.setBackgroundColor('#2A2A3A'); });
-      dBtn.on('pointerout', function () { dBtn.setColor('#F2B84B'); dBtn.setBackgroundColor('#1A1A2A'); });
-      dBtn.on('pointerdown', function () { self.placeMountOn(col, row, 'double'); self.hidePopup(); });
-    }
-    menu.add(dBtn);
-
-    // Close
-    const close = this.add.text(W / 2 - 16, -H / 2 + 14, '✕', {
-      fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#7C8CA0',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    close.on('pointerover', function () { close.setColor('#E8EDF2'); });
-    close.on('pointerout', function () { close.setColor('#7C8CA0'); });
-    close.on('pointerdown', function () { self.hidePopup(); });
-    menu.add(close);
-
-    this.popupContainer = menu;
+    menu.add(
+      this.add
+        .text(
+          0,
+          38,
+          doubleAvail > 0 && !doubleFits
+            ? 'Mount 2x needs two free cells side by side'
+            : 'Mount 2x occupies two cells and holds two panels',
+          {
+            fontFamily: 'Inter, sans-serif',
+            fontSize: '10px',
+            color: doubleAvail > 0 && !doubleFits ? '#FF6B6B' : '#7C8CA0',
+          }
+        )
+        .setOrigin(0.5)
+    );
   }
 
-  /* ── CLICK ON OCCUPIED CELL (edit mode) ── */
-  showEditPopup(col, row) {
-    this.hidePopup();
-    const cx = GRID_OFFSET_X + col * TILE + TILE / 2;
-    const cy = GRID_OFFSET_Y + row * TILE + TILE / 2;
-    const popY = Math.max(60, cy - 80);
-    const self = this;
+  placeMount(type, col, row) {
+    if (this.availableMounts(type) <= 0) {
+      this.showFlash('No mounts available');
+      return;
+    }
 
-    // Find what's on this cell
-    const mountEnt = this.entities.find(function (e) {
-      const ec = Math.floor((e.x - GRID_OFFSET_X) / TILE);
-      const er = Math.floor((e.y - GRID_OFFSET_Y) / TILE);
-      return ec === col && er === row && (e.getData('entityType') === 'mount_single' || e.getData('entityType') === 'mount_double');
+    if (!this.canPlaceAt(type, col, row)) {
+      this.showFlash(
+        MOUNT_TYPES[type].cells > 1 ? 'Needs two free cells side by side' : 'Cell occupied'
+      );
+      return;
+    }
+
+    this.createMount(type, col, row, []);
+    this.commit();
+  }
+
+  /* ══ ENTITY CONSTRUCTION ══ */
+
+  /**
+   * Creates a mount container and its panels.
+   *
+   * Panels are children of this container rather than independent entities.
+   * That is what guarantees a panel always renders above its own frame and
+   * moves and is removed with it — previously both were separate objects at the
+   * same cell competing for depth, so a panel could disappear behind its mount.
+   *
+   * @param {'mount_single'|'mount_double'} type
+   * @param {number} col anchor column (leftmost cell)
+   * @param {number} row
+   * @param {boolean[]} panelFlags which bays start filled
+   */
+  createMount(type, col, row, panelFlags = []) {
+    const def = MOUNT_TYPES[type];
+    if (!def) return null;
+
+    const { x, y } = this.mountPosition(type, col, row);
+
+    const container = this.add.container(x, y);
+    container.setData('mountType', type);
+    container.setData('gridCol', col);
+    container.setData('gridRow', row);
+    container.setData('panels', new Array(def.slots.length).fill(null));
+
+    // Hit area covers every reserved cell so the whole footprint is clickable.
+    container.setSize(TILE * def.cells, TILE);
+    container.setDepth(this.mountDepth(col, row));
+    container.setInteractive({ useHandCursor: true });
+
+    // The frame is added first, so any panel added later sits above it.
+    const frame = this.add.image(0, 0, def.texture);
+    container.add(frame);
+    container.setData('frame', frame);
+
+    container.on('pointerdown', () => {
+      if (!this.editMode) return;
+      this.showMountPopup(container);
     });
-    const panelEnt = this.entities.find(function (e) {
-      const ec = Math.floor((e.x - GRID_OFFSET_X) / TILE);
-      const er = Math.floor((e.y - GRID_OFFSET_Y) / TILE);
-      return ec === col && er === row && e.getData('entityType') === 'solar';
+
+    this.entityLayer.add(container);
+
+    this.mounts.push(container);
+    for (const cell of this.cellsFor(type, col, row)) {
+      this.occupancy.set(this.cellKey(cell.col, cell.row), container);
+    }
+
+    // Restore panels, ignoring flags beyond this mount's slot count.
+    def.slots.forEach((_slot, index) => {
+      if (panelFlags[index]) this.attachPanel(container, index, { silent: true });
     });
-    const mountType = mountEnt ? mountEnt.getData('entityType') : null;
-    const hasPanel = !!panelEnt;
-    const panelAvail = this.solarsOwned - (this.placedCount['solar'] || 0);
-    const isDouble = mountType === 'mount_double';
 
-    const W = 260;
-    const H = hasPanel ? 130 : 140;
-    const menu = this.add.container(GAME_WIDTH / 2, popY).setDepth(200);
-    const bg = this.add.rectangle(0, 0, W, H, 0x131f2e, 0.95).setStrokeStyle(1, 0x8B7355);
-    bg.setInteractive(); bg.on('pointerdown', function () {});
-    menu.add(bg);
+    return container;
+  }
 
-    const title = this.add.text(0, -H / 2 + 18, isDouble ? 'Double Mount' : 'Mount', {
-      fontFamily: '"Silkscreen", cursive', fontSize: '14px', color: '#F2B84B',
-    }).setOrigin(0.5);
-    menu.add(title);
-    menu.add(this.add.rectangle(0, -H / 2 + 36, W - 20, 1, 0x8B7355, 0.3));
+  /**
+   * Adds a panel sprite into one bay of a mount.
+   *
+   * @param {Phaser.GameObjects.Container} mount
+   * @param {number} slotIndex
+   * @param {{ silent?: boolean }} options `silent` skips the inventory check,
+   *   used when restoring a saved layout before inventory has synced.
+   */
+  attachPanel(mount, slotIndex, { silent = false } = {}) {
+    const type = mount.getData('mountType');
+    const def = MOUNT_TYPES[type];
+    const slot = def.slots[slotIndex];
+    if (!slot) return false;
 
-    let yOff = -H / 2 + 52;
+    const panels = mount.getData('panels');
+    if (panels[slotIndex]) {
+      if (!silent) this.showFlash('Bay already has a panel');
+      return false;
+    }
 
-    if (hasPanel) {
-      menu.add(this.add.text(0, yOff, '☀ Solar Panel', {
-        fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#F2B84B',
-      }).setOrigin(0.5));
-      yOff += 20;
+    if (!silent && this.availablePanels() <= 0) {
+      this.showFlash('No panels available');
+      return false;
+    }
 
-      const rmBtn = this.add.text(0, yOff, '🗑 Remove Panel', {
-        fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#E8EDF2',
-        backgroundColor: '#2A1A1A', padding: { x: 12, y: 5 },
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-      rmBtn.on('pointerover', function () { rmBtn.setColor('#FF6B6B'); });
-      rmBtn.on('pointerout', function () { rmBtn.setColor('#E8EDF2'); });
-      rmBtn.on('pointerdown', function () { self.removePanel(col, row); self.hidePopup(); });
-      menu.add(rmBtn);
-      yOff += 24;
-    } else {
-      const canPlace = panelAvail > 0;
-      const addBtn = this.add.text(0, yOff, '☀ Add Solar Panel (' + Math.max(0, panelAvail) + ' available)', {
-        fontFamily: 'Inter, sans-serif', fontSize: '12px',
-        color: canPlace ? '#F2B84B' : '#7C8CA0',
-        backgroundColor: canPlace ? '#2A2510' : '#1A1A1A', padding: { x: 12, y: 5 },
-      }).setOrigin(0.5).setInteractive({ useHandCursor: canPlace });
-      if (canPlace) {
-        addBtn.on('pointerover', function () { addBtn.setColor('#FFFFFF'); });
-        addBtn.on('pointerout', function () { addBtn.setColor('#F2B84B'); });
-        addBtn.on('pointerdown', function () { self.placePanelOn(col, row); self.hidePopup(); });
+    const sprite = this.add.image(slot.dx, slot.dy, 'solar_panel');
+    mount.add(sprite);
+    panels[slotIndex] = sprite;
+    mount.setData('panels', panels);
+
+    return true;
+  }
+
+  detachPanel(mount, slotIndex) {
+    const panels = mount.getData('panels');
+    const sprite = panels[slotIndex];
+    if (!sprite) return false;
+
+    sprite.destroy();
+    panels[slotIndex] = null;
+    mount.setData('panels', panels);
+    return true;
+  }
+
+  removeMount(mount) {
+    const type = mount.getData('mountType');
+    const col = mount.getData('gridCol');
+    const row = mount.getData('gridRow');
+
+    // Destroying the container also destroys its panel children.
+    for (const cell of this.cellsFor(type, col, row)) {
+      this.occupancy.delete(this.cellKey(cell.col, cell.row));
+    }
+    this.mounts = this.mounts.filter((m) => m !== mount);
+    mount.destroy();
+  }
+
+  /* ══ MOUNT POPUP ══ */
+
+  showMountPopup(mount) {
+    const type = mount.getData('mountType');
+    const def = MOUNT_TYPES[type];
+    const row = mount.getData('gridRow');
+    const panels = mount.getData('panels');
+
+    const rowHeight = 26;
+    const height = 74 + def.slots.length * rowHeight;
+    const anchorY = this.cellCentreY(row) - height / 2 - 20;
+
+    const menu = this.createPopup(def.label, 290, height, anchorY);
+
+    let y = -height / 2 + 50;
+
+    def.slots.forEach((_slot, index) => {
+      const filled = !!panels[index];
+      const bayLabel = def.slots.length > 1 ? `Bay ${index + 1}` : 'Panel';
+
+      menu.add(
+        this.add
+          .text(-118, y, bayLabel, {
+            fontFamily: 'Inter, sans-serif',
+            fontSize: '11px',
+            color: filled ? '#F2B84B' : '#7C8CA0',
+          })
+          .setOrigin(0, 0.5)
+      );
+
+      if (filled) {
+        this.addPopupButton(menu, {
+          x: 48,
+          y,
+          label: 'Remove panel',
+          tone: 'danger',
+          onClick: () => {
+            this.detachPanel(mount, index);
+            this.showFlash('Panel returned to storage');
+            this.commit();
+            this.showMountPopup(mount); // reopen so further edits are possible
+          },
+        });
+      } else {
+        const canAdd = this.availablePanels() > 0;
+        this.addPopupButton(menu, {
+          x: 48,
+          y,
+          label: canAdd ? `Add panel (${this.availablePanels()})` : 'No panels in storage',
+          enabled: canAdd,
+          onClick: () => {
+            if (this.attachPanel(mount, index)) {
+              this.commit();
+              this.showMountPopup(mount);
+            }
+          },
+        });
       }
-      menu.add(addBtn);
-      yOff += 24;
-    }
 
-    // Unmount
-    const unmountBtn = this.add.text(0, yOff, '📦 Remove Mount', {
-      fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#F2B84B',
-      backgroundColor: '#1A1A2A', padding: { x: 12, y: 5 },
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    unmountBtn.on('pointerover', function () { unmountBtn.setColor('#FFFFFF'); });
-    unmountBtn.on('pointerout', function () { unmountBtn.setColor('#F2B84B'); });
-    unmountBtn.on('pointerdown', function () { self.unmountAt(col, row); self.hidePopup(); });
-    menu.add(unmountBtn);
-
-    // Close
-    const close = this.add.text(W / 2 - 16, -H / 2 + 14, '✕', {
-      fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#7C8CA0',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    close.on('pointerover', function () { close.setColor('#E8EDF2'); });
-    close.on('pointerout', function () { close.setColor('#7C8CA0'); });
-    close.on('pointerdown', function () { self.hidePopup(); });
-    menu.add(close);
-
-    this.popupContainer = menu;
-  }
-
-  /* ── PLACEMENT ── */
-  placeMountOn(col, row, mountType) {
-    const countKey = mountType === 'double' ? 'mount_double' : 'mount_single';
-    const owned = mountType === 'double' ? this.doubleMountsOwned : this.mountsOwned;
-    const placed = this.placedCount[countKey] || 0;
-    if (owned - placed <= 0) { this.showFlash('No mounts available'); return; }
-
-    const x = GRID_OFFSET_X + col * TILE + TILE / 2;
-    const y = GRID_OFFSET_Y + row * TILE + TILE / 2;
-
-    // Check cell already occupied
-    if (this.entities.some(function (e) {
-      const ec = Math.floor((e.x - GRID_OFFSET_X) / TILE);
-      const er = Math.floor((e.y - GRID_OFFSET_Y) / TILE);
-      return ec === col && er === row && (e.getData('entityType') === 'mount_single' || e.getData('entityType') === 'mount_double');
-    })) { this.showFlash('Cell occupied'); return; }
-
-    const ent = this.createEntity(x, y, { type: countKey, id: countKey + '_' + Date.now() });
-    if (ent) {
-      this.entities.push(ent);
-      this.placedCount[countKey] = (this.placedCount[countKey] || 0) + 1;
-      this.emitPlacement();
-      if (this.editMode) { this.hideEditGrid(); this.showEditGrid(); }
-    }
-  }
-
-  placePanelOn(col, row) {
-    const avail = this.solarsOwned - (this.placedCount['solar'] || 0);
-    if (avail <= 0) { this.showFlash('No panels available'); return; }
-
-    const x = GRID_OFFSET_X + col * TILE + TILE / 2;
-    const y = GRID_OFFSET_Y + row * TILE + TILE / 2;
-
-    if (this.entities.some(function (e) {
-      const ec = Math.floor((e.x - GRID_OFFSET_X) / TILE);
-      const er = Math.floor((e.y - GRID_OFFSET_Y) / TILE);
-      return ec === col && er === row && e.getData('entityType') === 'solar';
-    })) { this.showFlash('Panel already here'); return; }
-
-    const ent = this.createEntity(x, y, { type: 'solar', id: 'solar_' + Date.now() });
-    if (ent) {
-      this.entities.push(ent);
-      this.placedCount['solar'] = (this.placedCount['solar'] || 0) + 1;
-      this.emitPlacement();
-    }
-  }
-
-  removePanel(col, row) {
-    const panel = this.entities.find(function (e) {
-      const ec = Math.floor((e.x - GRID_OFFSET_X) / TILE);
-      const er = Math.floor((e.y - GRID_OFFSET_Y) / TILE);
-      return ec === col && er === row && e.getData('entityType') === 'solar';
+      y += rowHeight;
     });
-    if (panel) {
-      this.placedCount['solar'] = Math.max(0, (this.placedCount['solar'] || 1) - 1);
-      panel.destroy();
-      this.entities = this.entities.filter(function (e) { return e !== panel; });
-      this.showFlash('Panel removed');
-      this.emitPlacement();
-      if (this.editMode) { this.hideEditGrid(); this.showEditGrid(); }
-    }
-  }
 
-  unmountAt(col, row) {
-    const toRemove = this.entities.filter(function (e) {
-      const ec = Math.floor((e.x - GRID_OFFSET_X) / TILE);
-      const er = Math.floor((e.y - GRID_OFFSET_Y) / TILE);
-      return ec === col && er === row;
+    this.addPopupButton(menu, {
+      y: height / 2 - 20,
+      label: 'Remove mount',
+      onClick: () => {
+        this.removeMount(mount);
+        this.showFlash('Returned to storage');
+        this.commit();
+        this.hidePopup();
+      },
     });
-    if (toRemove.length === 0) return;
-
-    for (const ent of toRemove) {
-      const t = ent.getData('entityType');
-      this.placedCount[t] = Math.max(0, (this.placedCount[t] || 1) - 1);
-      ent.destroy();
-    }
-    this.entities = this.entities.filter(function (e) { return toRemove.indexOf(e) === -1; });
-    this.showFlash('Returned to storage');
-    this.emitPlacement();
-    if (this.editMode) { this.hideEditGrid(); this.showEditGrid(); }
   }
 
-  /* ── FLASH ── */
+  /* ══ FLASH ══ */
+
   showFlash(text) {
-    const msg = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - TOOLBAR_H - 30, text, {
-      fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#F2B84B',
-      backgroundColor: '#131f2e', padding: { x: 10, y: 5 },
-    }).setOrigin(0.5).setDepth(99);
-    this.tweens.add({ targets: msg, alpha: 0, y: msg.y - 30, duration: 2000, ease: 'Power2', onComplete: function () { msg.destroy(); } });
-  }
+    const msg = this.add
+      .text(GAME_WIDTH / 2, GAME_HEIGHT - TOOLBAR_H - 30, text, {
+        fontFamily: 'Inter, sans-serif',
+        fontSize: '11px',
+        color: '#F2B84B',
+        backgroundColor: '#131f2e',
+        padding: { x: 10, y: 5 },
+      })
+      .setOrigin(0.5)
+      .setDepth(99);
 
-  hidePopup() { if (this.popupContainer) { this.popupContainer.destroy(); this.popupContainer = null; } }
-
-  /* ── ENTITY ── */
-  createEntity(x, y, data) {
-    const texMap = { solar: 'solar_panel', mount: 'mount_single', mount_single: 'mount_single', mount_double: 'mount_double' };
-    const tex = texMap[data.type];
-    if (!tex) return null;
-
-    // Depth sorting: rightmost columns render on top (higher depth = higher col)
-    const col = Math.floor((x - GRID_OFFSET_X) / TILE);
-    const row = Math.floor((y - GRID_OFFSET_Y) / TILE);
-    const depth = 10 + col + row * 0.01; // col is primary axis, row breaks ties
-
-    const c = this.add.container(x, y);
-    c.setData('entityType', data.type);
-    c.setData('entityId', data.id);
-    c.setData('gridCol', col);
-    c.setData('gridRow', row);
-    c.setSize(TILE, TILE);
-    c.setDepth(depth);
-    c.setInteractive({ draggable: false, useHandCursor: true });
-
-    // Display: use original texture size — no forced scaling
-    const sp = this.add.image(0, 0, tex);
-    c.add(sp);
-
-    const self = this;
-    c.on('pointerdown', function () {
-      if (!self.editMode) return;
-      const col = Math.floor((x - GRID_OFFSET_X) / TILE);
-      const row = Math.floor((y - GRID_OFFSET_Y) / TILE);
-      self.showEditPopup(col, row);
+    this.tweens.add({
+      targets: msg,
+      alpha: 0,
+      y: msg.y - 30,
+      duration: 2000,
+      ease: 'Power2',
+      onComplete: () => msg.destroy(),
     });
-
-    this.entityLayer.add(c);
-    return c;
   }
 
-  /* ── SAVE / RESTORE ── */
+  /* ══ PERSISTENCE ══ */
+
   /**
    * Storage key for the current player's farm layout.
    *
-   * Scoped by Firebase uid: the previous single `wattfarm_placement` key was
-   * shared by every account on the browser, so logging out and back in as
-   * someone else restored the other player's farm.
-   *
-   * Returns null when no user is known, which disables persistence entirely
-   * rather than risking a write to a shared key.
+   * Scoped by Firebase uid: a single global `wattfarm_placement` key was shared
+   * by every account on the browser, so logging in as someone else restored the
+   * previous player's farm. Returns null when no user is known, which disables
+   * persistence rather than risking a write to a shared key.
    */
   placementStorageKey() {
     const uid = getCurrentUserId();
@@ -431,14 +657,18 @@ export default class FarmScene extends Phaser.Scene {
     const key = this.placementStorageKey();
     if (!key) return;
 
-    const data = this.entities.map(function (e) {
-      const col = Math.floor((e.x - GRID_OFFSET_X) / TILE);
-      const row = Math.floor((e.y - GRID_OFFSET_Y) / TILE);
-      return { type: e.getData('entityType'), col: col, row: row };
-    });
+    const payload = {
+      v: 2,
+      mounts: this.mounts.map((mount) => ({
+        type: mount.getData('mountType'),
+        col: mount.getData('gridCol'),
+        row: mount.getData('gridRow'),
+        panels: mount.getData('panels').map(Boolean),
+      })),
+    };
 
     try {
-      localStorage.setItem(key, JSON.stringify(data));
+      localStorage.setItem(key, JSON.stringify(payload));
     } catch (e) {
       // Quota exceeded or storage disabled (private browsing). The farm still
       // works for this session; it just will not survive a reload.
@@ -447,11 +677,8 @@ export default class FarmScene extends Phaser.Scene {
   }
 
   /**
-   * Removes the pre-namespacing key.
-   *
-   * Layouts used to be stored under a single global `wattfarm_placement`, which
-   * every account on the browser shared. It is no longer read, but leaving it
-   * behind keeps one player's farm sitting in another's storage indefinitely.
+   * Removes the pre-namespacing key, which is no longer read but would
+   * otherwise leave one player's farm in another's storage indefinitely.
    */
   discardLegacyPlacement() {
     try {
@@ -459,8 +686,33 @@ export default class FarmScene extends Phaser.Scene {
         localStorage.removeItem('wattfarm_placement');
       }
     } catch {
-      // Storage unavailable (private browsing) — nothing to clean up.
+      // Storage unavailable — nothing to clean up.
     }
+  }
+
+  /**
+   * Converts the v1 format (a flat array where panels were separate entries at
+   * the same cell) into the current shape, so existing farms survive the
+   * change instead of silently vanishing.
+   */
+  migrateLegacyLayout(items) {
+    const mounts = [];
+    const panelCells = new Set();
+
+    for (const item of items) {
+      if (item?.type === 'solar') {
+        panelCells.add(`${item.col},${item.row}`);
+      } else if (item?.type === 'mount_single' || item?.type === 'mount_double') {
+        mounts.push({ type: item.type, col: item.col, row: item.row, panels: [] });
+      }
+    }
+
+    // A v1 cell held at most one panel, so it maps onto the first bay.
+    for (const mount of mounts) {
+      if (panelCells.has(`${mount.col},${mount.row}`)) mount.panels = [true];
+    }
+
+    return mounts;
   }
 
   restorePlacement() {
@@ -469,45 +721,94 @@ export default class FarmScene extends Phaser.Scene {
     const key = this.placementStorageKey();
     if (!key) return;
 
-    let data;
+    let raw;
     try {
-      data = JSON.parse(localStorage.getItem(key));
-    } catch (e) {
-      // Corrupted entry — discard it so the player is not stuck with a farm
-      // that can never load.
-      try { localStorage.removeItem(key); } catch { /* storage unavailable */ }
-    }
-    if (!data || !Array.isArray(data)) return;
-
-    const self = this;
-    data.forEach(function (item) {
-      const x = GRID_OFFSET_X + item.col * TILE + TILE / 2;
-      const y = GRID_OFFSET_Y + item.row * TILE + TILE / 2;
-      const ent = self.createEntity(x, y, { type: item.type, id: item.type + '_' + Date.now() + Math.random() });
-      if (ent) {
-        self.entities.push(ent);
-        self.placedCount[item.type] = (self.placedCount[item.type] || 0) + 1;
+      raw = JSON.parse(localStorage.getItem(key));
+    } catch {
+      // Corrupted entry — discard so the player is not stuck with a farm that
+      // can never load.
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        /* storage unavailable */
       }
-    });
-    this.emitPlacement();
-  }
+      return;
+    }
 
-  /* ── SYNC ── */
-  emitPlacement() {
-    const totalMounts = (this.placedCount['mount_single'] || 0) + (this.placedCount['mount_double'] || 0);
-    notifyPlacementChange(this.placedCount['solar'] || 0, totalMounts);
+    if (!raw) return;
+
+    const mounts = Array.isArray(raw)
+      ? this.migrateLegacyLayout(raw)
+      : Array.isArray(raw.mounts)
+        ? raw.mounts
+        : [];
+
+    let skipped = 0;
+
+    for (const entry of mounts) {
+      if (!MOUNT_TYPES[entry?.type]) continue;
+
+      const col = Number(entry.col);
+      const row = Number(entry.row);
+      if (!Number.isInteger(col) || !Number.isInteger(row)) continue;
+
+      // A saved double may no longer fit — the layout could predate the
+      // two-cell rule and overlap its neighbour.
+      if (!this.canPlaceAt(entry.type, col, row)) {
+        skipped += 1;
+        continue;
+      }
+
+      this.createMount(entry.type, col, row, Array.isArray(entry.panels) ? entry.panels : []);
+    }
+
+    if (skipped > 0) {
+      console.warn(`[game] skipped ${skipped} saved mount(s) that no longer fit the grid`);
+    }
+
+    // Persist immediately so a migrated or pruned layout is written in the
+    // current format rather than re-migrated on every load.
+    this.emitPlacement();
     this.savePlacement();
   }
-  updateMountCount(mc) { this.mountsOwned = typeof mc === 'number' ? mc : (this.mountsOwned || 0); }
-  updateSolarCount(sc) { this.solarsOwned = typeof sc === 'number' ? sc : (this.solarsOwned || 0); }
+
+  /* ══ REACT SYNC ══ */
+
+  /** Saves and notifies React. Called after every mutation. */
+  commit() {
+    this.emitPlacement();
+    this.savePlacement();
+    this.refreshEditGrid();
+  }
+
+  emitPlacement() {
+    const totalMounts = this.countPlaced('mount_single') + this.countPlaced('mount_double');
+    notifyPlacementChange(this.countPlacedPanels(), totalMounts);
+  }
+
+  updateMountCount(mc) {
+    this.mountsOwned = typeof mc === 'number' ? mc : this.mountsOwned || 0;
+  }
+
+  updateSolarCount(sc) {
+    this.solarsOwned = typeof sc === 'number' ? sc : this.solarsOwned || 0;
+  }
+
   syncAssets(assetList, mountCount) {
     this.mountsOwned = typeof mountCount === 'number' ? mountCount : 0;
-    var dm = 0;
-    if (assetList) {
-      var sa = assetList.find(function (a) { return a.type === 'solar'; }); if (sa) this.solarsOwned = sa.quantity;
-      var dmAsset = assetList.find(function (a) { return a.type === 'panel-mount-double'; });
-      if (dmAsset) dm = dmAsset.quantity;
+
+    let doubles = 0;
+    if (Array.isArray(assetList)) {
+      const solar = assetList.find((a) => a.type === 'solar');
+      if (solar) this.solarsOwned = solar.quantity;
+
+      const doubleMount = assetList.find((a) => a.type === 'panel-mount-double');
+      if (doubleMount) doubles = doubleMount.quantity;
     }
-    this.doubleMountsOwned = dm;
+    this.doubleMountsOwned = doubles;
+
+    // The open popup shows availability counts, which have just changed.
+    if (this.popupContainer) this.hidePopup();
+    this.refreshEditGrid();
   }
 }
