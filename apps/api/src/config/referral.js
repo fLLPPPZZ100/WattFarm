@@ -49,10 +49,29 @@ export const REFERRAL_LEVELS = Object.freeze([
 /**
  * One-off VLT credited to a player who joins through an invite.
  *
- * Paid to the person joining, never to the referrer — that asymmetry is what
- * makes self-referral pointless. Someone who registers 50 accounts through
- * their own link gets 50 accounts each holding a little extra VLT, and no way
- * to move it anywhere, because the game has no transfers between players.
+ * Paid to the person joining, never to the referrer.
+ *
+ * ## This does NOT make self-referral pointless
+ *
+ * An earlier version of this comment claimed it did, on the grounds that the
+ * game has no player-to-player transfers, so a bonus farmed onto a throwaway
+ * account is stranded. The first half is true and the conclusion is wrong.
+ *
+ * The bonus is stranded only as *currency*. Spent on panels it becomes installed
+ * power, installed power earns mining payouts, and `commissionRate` of those
+ * payouts is minted into the referrer's real balance. So the bonus is
+ * extractable, at the commission rate, indefinitely.
+ *
+ * Whether the farm is *profitable* depends on dilution. With alt power `x`, own
+ * rate `R`, baseline `B` and rate `c`, the referrer earns
+ * `BUDGET * (R + c*x) / (B + R + x)`, which increases with `x` only while
+ * `R < c*B / (1 - c)`. At B=40 that is R < 4.4 W/s at 10% and R < 13.3 W/s at
+ * 25% — so farming pays for small accounts and costs large ones.
+ *
+ * That is a property of the current numbers, not a safeguard. Change the
+ * baseline and it changes: a *higher* baseline makes farming attractive to
+ * bigger accounts, because it shrinks the share that dilution costs them while
+ * commission stays pure addition.
  */
 export const SIGNUP_BONUS_VLT = 25;
 

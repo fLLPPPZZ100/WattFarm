@@ -129,7 +129,10 @@ export async function runPayoutCycle() {
           powerRate: miner.rate,
           payoutId: payout.id,
           payoutAmount,
-          referrerPoints: referralState.referrerPoints.get(state.referredById) ?? 0,
+          // The map itself, not a snapshot value: a referrer with two referrals
+          // qualifying in the same cycle must see the first point before the
+          // second commission is priced.
+          referrerPoints: referralState.referrerPoints,
         });
       });
 

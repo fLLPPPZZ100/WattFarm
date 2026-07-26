@@ -49,12 +49,37 @@ export async function ensureReferralCode(userId, { client } = {}) {
     const code = generateCode();
 
     try {
-      const updated = await db.user.update({
-        where: { id: userId },
+      /**
+       * Guarded by `referralCode: null`, not just the id.
+       *
+       * An unguarded `update` was a silent link-breaker: two concurrent calls —
+       * a page load racing the session sync, or two tabs — both read null, both
+       * generated a code, and the second *overwrote* the first. Any invite link
+       * already shared with the first code stopped resolving, with nothing in
+       * the logs to say why.
+       *
+       * `updateMany` lets the loser detect it lost (count 0) and adopt the
+       * winner's code instead of clobbering it.
+       */
+      const claimed = await db.user.updateMany({
+        where: { id: userId, referralCode: null },
         data: { referralCode: code },
-        select: { referralCode: true },
       });
-      return updated.referralCode;
+
+      if (claimed.count === 0) {
+        // Someone else issued a code first. Theirs is the real one, and it may
+        // already be in circulation.
+        const winner = await db.user.findUnique({
+          where: { id: userId },
+          select: { referralCode: true },
+        });
+        if (winner?.referralCode) return winner.referralCode;
+
+        // No row at all — the account does not exist. Nothing to allocate to.
+        throw new Error(`Cannot allocate a referral code: user=${userId} does not exist`);
+      }
+
+      return code;
     } catch (err) {
       // P2002 on referralCode: astronomically unlikely, but a retry is cheaper
       // than reasoning about whether "unlikely" is "impossible".
@@ -118,16 +143,22 @@ export async function resolveReferrer({ newUserId, rawCode, client }) {
  * @param {object} params
  * @param {{ id: string, referredById: string, referralQualifiedAt: Date | null }} params.referred
  * @param {number} params.powerRate current installed output, W/s
- * @param {number} params.referrerPoints referrer's points before this call
- * @returns {Promise<{ qualified: boolean, referrerPoints: number }>}
+ * @param {Map<string, number>} params.referrerPoints referrer id to point total.
+ *   Mutated in place when a point is awarded, so that a second referral
+ *   qualifying later in the same cycle is priced at the tier the referrer has
+ *   actually reached. Passing a plain number here meant every referral in a
+ *   cycle was priced from the same stale snapshot and under-paid.
+ * @returns {Promise<{ qualified: boolean, points: number }>}
  */
 async function ensureQualified(tx, { referred, powerRate, referrerPoints }) {
+  const current = referrerPoints.get(referred.referredById) ?? 0;
+
   if (referred.referralQualifiedAt) {
-    return { qualified: true, referrerPoints };
+    return { qualified: true, points: current };
   }
 
   if (powerRate < QUALIFYING_POWER_RATE) {
-    return { qualified: false, referrerPoints };
+    return { qualified: false, points: current };
   }
 
   /**
@@ -142,15 +173,20 @@ async function ensureQualified(tx, { referred, powerRate, referrerPoints }) {
 
   if (claimed.count === 0) {
     // Someone else qualified this referral first; the point is already theirs.
-    return { qualified: true, referrerPoints };
+    return { qualified: true, points: current };
   }
 
-  await tx.user.update({
+  const updated = await tx.user.update({
     where: { id: referred.referredById },
     data: { referralPoints: { increment: 1 } },
+    select: { referralPoints: true },
   });
 
-  return { qualified: true, referrerPoints: referrerPoints + 1 };
+  // Read the post-increment value back rather than assuming current + 1: the
+  // snapshot may already have been stale before this cycle started.
+  referrerPoints.set(referred.referredById, updated.referralPoints);
+
+  return { qualified: true, points: updated.referralPoints };
 }
 
 /**
@@ -165,7 +201,7 @@ async function ensureQualified(tx, { referred, powerRate, referrerPoints }) {
  * @param {number} params.powerRate
  * @param {string} params.payoutId
  * @param {Prisma.Decimal} params.payoutAmount
- * @param {number} params.referrerPoints
+ * @param {Map<string, number>} params.referrerPoints mutated when a point is awarded
  * @returns {Promise<{ referrerId: string, amount: number, rate: number } | null>}
  */
 export async function settleReferralForPayout(
@@ -174,7 +210,7 @@ export async function settleReferralForPayout(
 ) {
   if (!referred?.referredById) return null;
 
-  const { qualified, referrerPoints: points } = await ensureQualified(tx, {
+  const { qualified, points } = await ensureQualified(tx, {
     referred,
     powerRate,
     referrerPoints,
