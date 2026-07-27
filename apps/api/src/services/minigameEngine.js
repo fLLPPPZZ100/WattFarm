@@ -7,10 +7,10 @@
  *   Tier 2: 300s (5min, plays 10-19 today)
  *   Tier 3: 600s (10min, plays 20+ today)
  *
- * Loot table:
- *   none:    98.65%
- *   common:   1.00%  → 5 VLT
- *   rare:     0.30%  → 25 VLT
+ * Loot table (EV = 0.55 VLT/play):
+ *   none:    96.95%
+ *   common:   2.50%  → 10 VLT
+ *   rare:     0.50%  → 50 VLT
  *   epic:     0.05%  → 100 VLT
  */
 
@@ -18,9 +18,9 @@ const COOLDOWN_TIERS = [10, 60, 300, 600];
 
 const LOOT_TABLE = [
   { result: 'epic', threshold: 0.0005, vlt: 100 },
-  { result: 'rare', threshold: 0.0035, vlt: 25 },   // cumulative: 0.0005 + 0.0030 = 0.0035
-  { result: 'common', threshold: 0.0135, vlt: 5 },   // cumulative: 0.0035 + 0.0100 = 0.0135
-  { result: 'none', threshold: 1.0, vlt: 0 },        // remainder
+  { result: 'rare', threshold: 0.0055, vlt: 50 },    // cumulative: 0.0005 + 0.0050 = 0.0055
+  { result: 'common', threshold: 0.0305, vlt: 10 },  // cumulative: 0.0055 + 0.0250 = 0.0305
+  { result: 'none', threshold: 1.0, vlt: 0 },        // remainder — EV = 0.55 VLT/play (3x previous)
 ];
 
 /**
