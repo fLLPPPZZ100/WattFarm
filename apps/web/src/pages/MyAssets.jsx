@@ -15,6 +15,15 @@ function withAlpha(hex, a) {
   return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
 }
 
+/**
+ * Formats a price with up to 2 decimal places and thousands separators.
+ * @param {number} n
+ * @returns {string}
+ */
+function fmtPrice(n) {
+  return (n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
 function fmt(n) { return (n || 0).toFixed(1); }
 
 function calcTotalPrice(unitPrice, qty) {
@@ -26,6 +35,7 @@ var CATEGORIES = [
   { key: 'promotions', label: 'Promotions', icon: '🔥' },
   { key: 'generators', label: 'Generators', icon: '⚡' },
   { key: 'supports', label: 'Supports', icon: '🔧' },
+  { key: 'grid', label: 'Grid Expansion', icon: '🔲' },
 ];
 
 var DEFAULT_COLOR = '#2A3B4D';
@@ -55,6 +65,7 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
   if (isGenerator) {
     var meta = GENERATOR_META[item.type] || {};
     powerW = item.baseW || meta.baseW || 0;
+    // Authoritative price from server (exponential pricing)
     unitPrice = item.currentPrice || item.basePrice || 0;
   } else {
     unitPrice = item.price || 0;
@@ -87,6 +98,12 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
         {isGenerator && powerW > 0 && (
           <p className="text-text-muted text-xs mt-0.5">+{powerW.toFixed(1)} W/s production</p>
         )}
+        {isGenerator && (
+          <p className="text-amber-400/80 text-[11px] mt-1 flex items-center gap-1">
+            <span aria-hidden="true">↑</span>
+            <span>Price increases per unit owned</span>
+          </p>
+        )}
         {!isGenerator && item.description && (
           <p className="text-text-muted text-xs mt-1 leading-tight">{item.description}</p>
         )}
@@ -97,11 +114,11 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
         <div>
           {isPromo && item.originalPrice ? (
             <span>
-              <span className="font-mono text-base text-accent-watt">{fmt(item.price)} VLT</span>
-              <span className="text-text-muted text-xs line-through ml-2">{fmt(item.originalPrice)} VLT</span>
+              <span className="font-mono text-base text-accent-watt">{fmtPrice(item.price)} VLT</span>
+              <span className="text-text-muted text-xs line-through ml-2">{fmtPrice(item.originalPrice)} VLT</span>
             </span>
           ) : (
-            <span className="font-mono text-base text-accent-watt">{fmt(unitPrice)} VLT</span>
+            <span className="font-mono text-base text-accent-watt">{fmtPrice(unitPrice)} VLT</span>
           )}
         </div>
       )}
@@ -111,7 +128,7 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
         <div className="flex items-center gap-2">
           <span className="text-text-muted text-xs">Qty:</span>
           <button onClick={function () { setQty(Math.max(1, qty - 1)); }} className="w-8 h-8 rounded bg-bg-panel border border-line-dusk text-text-muted hover:text-text-primary text-base font-bold flex items-center justify-center">−</button>
-          <input type="text" inputMode="numeric" value={qty} onChange={function (e) { var v = parseInt(e.target.value, 10); if (!isNaN(v) && v >= 1) setQty(v); else if (e.target.value === '') setQty(1); }} className="w-16 h-8 text-center bg-bg-abyss border border-line-dusk rounded text-text-primary text-sm font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+          <input type="text" inputMode="numeric" value={qty} onChange={function (e) { var v = parseInt(e.target.value, 10); if (!isNaN(v) && v >= 1) setQty(v); else if (e.target.value === '') setQty(1); }} className="w-16 h-8 text-center bg-bg-abyss border border-line-dusk rounded text-text-primary text-sm font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" aria-label="Quantity" />
           <button onClick={function () { setQty(qty + 1); }} className="w-8 h-8 rounded bg-bg-panel border border-line-dusk text-text-muted hover:text-text-primary text-base font-bold flex items-center justify-center">+</button>
           <button onClick={function () { setQty(99); }} className="text-accent-watt text-xs font-semibold hover:underline ml-1">MAX</button>
         </div>
@@ -120,6 +137,11 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
       {/* VLT price pill + Buy button (generators & supports) */}
       {showPurchaseSystem && (
         <>
+          {/* Unit price display */}
+          <p className="text-text-muted text-[11px] font-mono">
+            Unit: {fmtPrice(unitPrice)} VLT
+          </p>
+
           {/* Price pill */}
           <div className={'flex items-center justify-center gap-1.5 py-2 rounded-lg border text-sm font-mono ' +
             (insufficient
@@ -129,7 +151,7 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
               style={insufficient
                 ? { imageRendering: 'pixelated', filter: 'grayscale(0.5) sepia(1) hue-rotate(-30deg) saturate(4) brightness(0.9)' }
                 : { imageRendering: 'pixelated', filter: 'drop-shadow(0 0 4px rgba(242,184,75,0.4))' }} />
-            <span>{fmt(totalPrice)} VLT</span>
+            <span>{fmtPrice(totalPrice)} VLT</span>
           </div>
 
           {/* Buy button */}
@@ -153,10 +175,127 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
           disabled={loading}
           className="mt-auto w-full bg-accent-watt text-bg-abyss font-semibold py-2.5 rounded text-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {loading ? 'Buying...' : 'Buy (' + fmt(unitPrice) + ' VLT)'}
+          {loading ? 'Buying...' : 'Buy (' + fmtPrice(unitPrice) + ' VLT)'}
         </button>
       )}
     </div>
+  );
+}
+
+// ===== GRID EXPANSION SECTION =====
+function GridExpansionPanel() {
+  var { gridInfo, gridLoading, gridError, vltBalance, fetchGridInfo, expandGrid } = useAssetsStore();
+  var [expandSuccess, setExpandSuccess] = useState(false);
+
+  useEffect(function () {
+    fetchGridInfo();
+  }, [fetchGridInfo]);
+
+  var handleExpand = async function () {
+    setExpandSuccess(false);
+    try {
+      await expandGrid();
+      setExpandSuccess(true);
+    } catch (e) {
+      // Error is surfaced via gridError in the store
+    }
+  };
+
+  if (gridLoading && !gridInfo) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <p className="text-text-muted text-sm">Loading grid info...</p>
+      </div>
+    );
+  }
+
+  if (gridError && !gridInfo) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="bg-red-900/20 border border-red-800 rounded-lg p-6 text-center max-w-md">
+          <p className="text-red-400 text-sm">{gridError}</p>
+          <button onClick={fetchGridInfo} className="mt-3 text-accent-watt text-xs underline hover:brightness-110">Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  var maxRows = gridInfo?.maxRows || 8;
+  var currentRows = gridInfo?.currentRows || 0;
+  var isMaxed = currentRows >= maxRows;
+  var nextCost = gridInfo?.nextExpansionCost || 0;
+  var canAfford = nextCost > 0 && nextCost <= vltBalance;
+
+  return (
+    <section>
+      <h2 className="font-display text-lg text-accent-watt tracking-wide mb-4">🔲 GRID EXPANSION</h2>
+      <div className="max-w-md">
+        <div className="rounded-xl border border-line-dusk bg-bg-abyss p-6 flex flex-col gap-4">
+          {/* Grid status */}
+          <div>
+            <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Current Grid Size</p>
+            <p className="font-mono text-lg text-text-primary">{currentRows} / {maxRows} rows</p>
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full h-2 bg-bg-panel border border-line-dusk rounded-full overflow-hidden">
+            <div
+              className="h-full bg-accent-watt transition-all"
+              style={{ width: (currentRows / maxRows * 100).toFixed(0) + '%' }}
+            />
+          </div>
+
+          {isMaxed ? (
+            <div className="bg-green-900/20 border border-green-700/40 rounded-lg p-4 text-center">
+              <p className="text-green-400 font-semibold text-sm">Grid fully expanded</p>
+              <p className="text-text-muted text-xs mt-1">You have reached the maximum grid size.</p>
+            </div>
+          ) : (
+            <>
+              {/* Cost display */}
+              <div className="flex items-center justify-between">
+                <span className="text-text-muted text-sm">Next expansion cost:</span>
+                <span className={'font-mono text-sm ' + (canAfford ? 'text-accent-watt' : 'text-red-400')}>
+                  {fmtPrice(nextCost)} VLT
+                </span>
+              </div>
+
+              {/* Expand button */}
+              <button
+                onClick={handleExpand}
+                disabled={!canAfford || gridLoading}
+                className={'w-full font-semibold py-3 rounded-lg text-sm transition-all ' +
+                  (canAfford
+                    ? 'bg-accent-watt text-bg-abyss hover:brightness-110'
+                    : 'bg-[#374151] text-[#9ca3af] cursor-not-allowed')}
+              >
+                {gridLoading ? 'Expanding...' : 'Expand Grid (+1 row)'}
+              </button>
+
+              {!canAfford && nextCost > 0 && (
+                <p className="text-red-400/80 text-xs text-center">
+                  Insufficient balance. You need {fmtPrice(nextCost - vltBalance)} more VLT.
+                </p>
+              )}
+            </>
+          )}
+
+          {/* Success feedback */}
+          {expandSuccess && !isMaxed && (
+            <div className="bg-green-900/20 border border-green-700/40 rounded-lg p-3 text-center">
+              <p className="text-green-400 text-sm">Grid expanded successfully!</p>
+            </div>
+          )}
+
+          {/* Error feedback from expand attempt */}
+          {gridError && gridInfo && (
+            <div className="bg-red-900/20 border border-red-800 rounded-lg p-3 text-center">
+              <p className="text-red-400 text-xs">{gridError}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -256,6 +395,11 @@ export default function Shop() {
                 })}
               </div>
             </section>
+          )}
+
+          {/* GRID EXPANSION */}
+          {activeCategory === 'grid' && (
+            <GridExpansionPanel />
           )}
         </div>
       </div>

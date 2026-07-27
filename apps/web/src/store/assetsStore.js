@@ -9,6 +9,9 @@ const initialState = {
   assets: [],
   loading: false,
   error: null,
+  gridInfo: null,
+  gridLoading: false,
+  gridError: null,
 };
 
 export const useAssetsStore = create((set, get) => ({
@@ -43,11 +46,36 @@ export const useAssetsStore = create((set, get) => ({
     set({ loading: true, error: null });
     try {
       const data = await api.post('/api/assets/buy', { type, quantity: quantity || 1 });
+      // Re-fetch catalog to get updated currentPrice (exponential pricing)
       await Promise.all([get().fetchCatalog(), get().fetchMining()]);
       set({ loading: false });
       return data;
     } catch (err) {
       set({ loading: false, error: err.message });
+      throw err;
+    }
+  },
+
+  fetchGridInfo: async () => {
+    set({ gridLoading: true, gridError: null });
+    try {
+      const data = await api.get('/api/assets/grid-info');
+      set({ gridInfo: data, gridLoading: false });
+    } catch (err) {
+      set({ gridLoading: false, gridError: err.message });
+    }
+  },
+
+  expandGrid: async () => {
+    set({ gridLoading: true, gridError: null });
+    try {
+      const data = await api.post('/api/assets/expand-grid', {});
+      // Refresh grid info and balance after expansion
+      await Promise.all([get().fetchGridInfo(), get().fetchMining()]);
+      set({ gridLoading: false });
+      return data;
+    } catch (err) {
+      set({ gridLoading: false, gridError: err.message });
       throw err;
     }
   },
