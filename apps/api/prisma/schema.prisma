@@ -18,6 +18,7 @@ model User {
   vltBalance      Decimal            @default(0) @db.Decimal(18, 4)
   avatarId        String             @default("default")
   unlockedAvatars String[]           @default(["default"])
+  gridRows        Int                @default(4)
   createdAt       DateTime           @default(now())
   assets          PlayerAsset[]
   minigameLogs    MinigameSession[]

@@ -10,11 +10,27 @@
  * otherwise the player sees a layout the server will reject.
  */
 
+/** Number of columns in the grid (fixed). */
+export const GRID_COLS = 14;
+
+/** Default number of rows before any grid expansion. */
+export const GRID_DEFAULT_ROWS = 4;
+
 /** Grid dimensions. Matches the grass band measured from the background art. */
 export const GRID = Object.freeze({
-  cols: 14,
-  rows: 4,
+  cols: GRID_COLS,
+  rows: GRID_DEFAULT_ROWS,
 });
+
+/**
+ * Returns a grid descriptor for the given number of rows.
+ * Used when a player has expanded their grid beyond the default.
+ * @param {number} rows
+ * @returns {{ cols: number, rows: number }}
+ */
+export function getGridForRows(rows) {
+  return { cols: GRID_COLS, rows };
+}
 
 /** Watts per second produced by a single panel before any mount bonus. */
 export const PANEL_BASE_W = 1;
@@ -59,10 +75,17 @@ export function cellsFor(type, col, row) {
   return cells;
 }
 
-/** True when every cell the mount needs is inside the grid. */
-export function withinGrid(type, col, row) {
+/**
+ * True when every cell the mount needs is inside the grid.
+ * @param {string} type
+ * @param {number} col
+ * @param {number} row
+ * @param {number} [gridRows] — player's current grid rows (default: GRID_DEFAULT_ROWS)
+ */
+export function withinGrid(type, col, row, gridRows = GRID_DEFAULT_ROWS) {
+  const grid = getGridForRows(gridRows);
   return cellsFor(type, col, row).every(
-    (cell) => cell.col >= 0 && cell.col < GRID.cols && cell.row >= 0 && cell.row < GRID.rows
+    (cell) => cell.col >= 0 && cell.col < grid.cols && cell.row >= 0 && cell.row < grid.rows
   );
 }
 

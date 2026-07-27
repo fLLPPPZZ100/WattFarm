@@ -6,6 +6,7 @@ import { withUserLock, UserNotFoundError } from '../lib/userLock.js';
 import {
   MOUNT_TYPES,
   PANEL_ASSET_TYPE,
+  GRID_DEFAULT_ROWS,
   cellsFor,
   withinGrid,
   publicConfig,
@@ -36,8 +37,9 @@ function serialiseMount(mount) {
  *
  * @param {unknown} mounts
  * @param {Record<string, number>} owned quantity owned per asset type
+ * @param {number} [gridRows] player's current grid rows
  */
-function validateLayout(mounts, owned) {
+function validateLayout(mounts, owned, gridRows = GRID_DEFAULT_ROWS) {
   const problems = [];
 
   if (!Array.isArray(mounts)) return ['`mounts` must be an array'];
@@ -62,7 +64,7 @@ function validateLayout(mounts, owned) {
       return;
     }
 
-    if (!withinGrid(mount.type, col, row)) {
+    if (!withinGrid(mount.type, col, row, gridRows)) {
       problems.push(`mount ${index}: does not fit the grid at (${col}, ${row})`);
       return;
     }
@@ -153,7 +155,11 @@ router.put('/layout', verifyAuthStrict, configLimiter, async (req, res) => {
       const owned = {};
       for (const asset of assets) owned[asset.type] = asset.quantity;
 
-      const problems = validateLayout(submitted, owned);
+      // Read the user's grid size for expansion support.
+      const user = await tx.user.findUnique({ where: { id: req.uid }, select: { gridRows: true } });
+      const gridRows = user?.gridRows ?? GRID_DEFAULT_ROWS;
+
+      const problems = validateLayout(submitted, owned, gridRows);
       if (problems.length > 0) {
         return { status: 400, body: { error: 'Invalid layout', problems } };
       }

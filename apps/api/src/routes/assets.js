@@ -9,6 +9,7 @@ import {
   multiplyMoney,
   affordableUnits,
   canAfford,
+  Prisma,
 } from '../lib/money.js';
 import { computePowerRate } from '../services/powerCalculator.js';
 import env from '../config/env.js';
@@ -20,6 +21,92 @@ const PURCHASABLE_TYPES = ['solar', 'panel-mount', 'panel-mount-double'];
 
 /** Upper bound on a single purchase, to keep quantities and totals sane. */
 const MAX_PURCHASE_QUANTITY = 1000;
+
+/**
+ * Computes the total cost of buying `qty` units of an asset with exponential
+ * pricing.
+ *
+ * Formula (geometric series):
+ *   totalPrice = basePrice × multiplier^owned × (multiplier^qty - 1) / (multiplier - 1)
+ *
+ * When multiplier === 1 the price is flat: basePrice × qty.
+ *
+ * @param {Prisma.Decimal | number | string} basePrice
+ * @param {number} multiplier
+ * @param {number} owned  — quantity the player already owns
+ * @param {number} qty    — how many units are being purchased
+ * @returns {Prisma.Decimal}
+ */
+function computeExponentialTotal(basePrice, multiplier, owned, qty) {
+  const base = money(basePrice);
+  if (multiplier <= 1) {
+    return base.mul(qty);
+  }
+  const m = new Prisma.Decimal(multiplier);
+  // multiplier^owned
+  const mPowOwned = m.pow(owned);
+  // multiplier^qty
+  const mPowQty = m.pow(qty);
+  // geometric sum: base × m^owned × (m^qty - 1) / (m - 1)
+  const numerator = mPowQty.minus(1);
+  const denominator = m.minus(1);
+  return base.mul(mPowOwned).mul(numerator.div(denominator));
+}
+
+/**
+ * Calculates how many whole units a player can afford given exponential pricing.
+ *
+ * Iteratively adds the cost of each successive unit until the remaining balance
+ * is exhausted. For flat pricing (multiplier <= 1) falls back to simple
+ * division.
+ *
+ * @param {Prisma.Decimal | number} balance
+ * @param {Prisma.Decimal | number | string} basePrice
+ * @param {number} multiplier
+ * @param {number} owned
+ * @returns {number}
+ */
+function affordableUnitsExponential(balance, basePrice, multiplier, owned) {
+  const bal = money(balance);
+  const base = money(basePrice);
+
+  if (base.lte(0)) return 0;
+
+  // Flat pricing shortcut
+  if (multiplier <= 1) {
+    return Math.floor(bal.div(base).toNumber());
+  }
+
+  const m = new Prisma.Decimal(multiplier);
+  let remaining = bal;
+  let count = 0;
+
+  // Cap the loop at MAX_PURCHASE_QUANTITY to prevent runaway iteration.
+  while (count < MAX_PURCHASE_QUANTITY) {
+    const nextUnitCost = base.mul(m.pow(owned + count));
+    if (remaining.lt(nextUnitCost)) break;
+    remaining = remaining.minus(nextUnitCost);
+    count++;
+  }
+
+  return count;
+}
+
+/**
+ * Computes the price of the next single unit (the one right after the player's
+ * current inventory).
+ *
+ * @param {Prisma.Decimal | number | string} basePrice
+ * @param {number} multiplier
+ * @param {number} owned
+ * @returns {Prisma.Decimal}
+ */
+function computeNextPrice(basePrice, multiplier, owned) {
+  const base = money(basePrice);
+  if (multiplier <= 1) return base;
+  const m = new Prisma.Decimal(multiplier);
+  return base.mul(m.pow(owned));
+}
 
 // GET /api/assets/catalog — list all assets with current price
 router.get('/catalog', verifyAuth, async (req, res) => {
@@ -37,14 +124,17 @@ router.get('/catalog', verifyAuth, async (req, res) => {
 
     // Prices are Decimal in the database; emit numbers so the frontend
     // contract is unchanged.
-    const result = catalog.map((item) => ({
-      type: item.type,
-      basePrice: moneyToNumber(item.basePrice),
-      multiplier: item.multiplier,
-      baseW: item.baseW,
-      currentPrice: moneyToNumber(item.basePrice),
-      quantityOwned: quantityMap[item.type] || 0,
-    }));
+    const result = catalog.map((item) => {
+      const owned = quantityMap[item.type] || 0;
+      return {
+        type: item.type,
+        basePrice: moneyToNumber(item.basePrice),
+        multiplier: item.multiplier,
+        baseW: item.baseW,
+        currentPrice: moneyToNumber(computeNextPrice(item.basePrice, item.multiplier, owned)),
+        quantityOwned: owned,
+      };
+    });
 
     res.json({ catalog: result });
   } catch (err) {
@@ -96,26 +186,36 @@ router.post(
         return res.status(404).json({ error: 'Asset type not found in catalog' });
       }
 
-      const unitPrice = money(catalogEntry.basePrice);
-      const totalPrice = multiplyMoney(unitPrice, qty);
-
       const result = await withUserLock(req.uid, async (tx, user) => {
+        // Read the player's current quantity for this asset type (needed for
+        // exponential pricing).
+        const existing = await tx.playerAsset.findFirst({
+          where: { userId: req.uid, type },
+        });
+        const owned = existing ? existing.quantity : 0;
+
+        // Compute the total cost using exponential or flat pricing.
+        const totalPrice = computeExponentialTotal(
+          catalogEntry.basePrice,
+          catalogEntry.multiplier,
+          owned,
+          qty
+        );
+
         // `user` was read under FOR UPDATE, so this balance cannot change
         // until the transaction commits.
         if (!canAfford(user.vltBalance, totalPrice)) {
           return {
             insufficient: true,
             balance: money(user.vltBalance),
+            totalPrice,
+            owned,
           };
         }
 
         const updatedUser = await tx.user.update({
           where: { id: req.uid },
           data: { vltBalance: { decrement: totalPrice } },
-        });
-
-        const existing = await tx.playerAsset.findFirst({
-          where: { userId: req.uid, type },
         });
 
         const updatedAsset = existing
@@ -145,24 +245,40 @@ router.post(
           },
         });
 
-        return { insufficient: false, user: updatedUser, asset: updatedAsset };
+        return {
+          insufficient: false,
+          user: updatedUser,
+          asset: updatedAsset,
+          totalPrice,
+          owned,
+        };
       });
 
       if (result.insufficient) {
         return res.status(400).json({
           error: 'Insufficient VLT balance',
-          required: moneyToNumber(totalPrice),
+          required: moneyToNumber(result.totalPrice),
           balance: moneyToNumber(result.balance),
-          maxAffordable: affordableUnits(result.balance, unitPrice),
+          maxAffordable: affordableUnitsExponential(
+            result.balance,
+            catalogEntry.basePrice,
+            catalogEntry.multiplier,
+            result.owned
+          ),
         });
       }
+
+      const newOwned = result.owned + qty;
 
       return res.json({
         success: true,
         quantity: qty,
-        totalPrice: moneyToNumber(totalPrice),
+        totalPrice: moneyToNumber(result.totalPrice),
         newBalance: moneyToNumber(result.user.vltBalance),
         newQuantity: result.asset.quantity,
+        nextPrice: moneyToNumber(
+          computeNextPrice(catalogEntry.basePrice, catalogEntry.multiplier, newOwned)
+        ),
       });
     } catch (err) {
       if (err instanceof UserNotFoundError) {
