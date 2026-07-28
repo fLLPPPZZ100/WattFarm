@@ -3,6 +3,26 @@
 > Final analysis — 2026-07-27
 > Based on: income-sources.md, spending-sinks.md, progression-model.md
 
+> **Status: historical snapshot.** This describes the economy as it stood on
+> 2026-07-27 and has not been rewritten since. Several findings below have been
+> addressed, so read it as the reasoning that motivated those changes rather
+> than as a description of the current build:
+>
+> - **P0, exponential pricing** — the geometric formula, including the series
+>   total for multi-unit buys, is implemented in `routes/assets.js`. It is inert
+>   only because every seeded `multiplier` is 1; the fix is now a seed value, not
+>   missing code.
+> - **P1, cold start** — new accounts receive a starting VLT grant on
+>   provisioning (`routes/auth.js`).
+> - **Minigame yield** — the loot table was tripled to an EV of 0.55 VLT per
+>   play (96.95% miss, 10/50/100 VLT). The figures quoted below (0.175 EV,
+>   98.65% miss) are the old table.
+> - **Endgame sink** — grid expansion exists: one row at a time to 8, at
+>   `50000 × 4^(rows - 4)` VLT, and it is purchasable from the Shop.
+>
+> Still open: wind and hydro remain dormant, so 100 of the 150 VLT per cycle are
+> never distributed. See `DECISIONS.md` for what the build does today.
+
 ---
 
 ## 1. Executive Summary

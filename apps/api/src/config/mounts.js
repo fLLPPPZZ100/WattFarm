@@ -97,10 +97,18 @@ export function panelOutput(type) {
 /**
  * Serialisable view of the rules, sent to the client so the UI can show bays
  * and bonuses without hardcoding a second source of truth for them.
+ *
+ * `gridRows` must be the player's own row count. This used to always emit the
+ * default `GRID`, so a player who had bought an expansion was told their farm
+ * was still four rows tall — the server validated layouts against the real
+ * number while describing a smaller one, and the extra rows could never be
+ * drawn.
+ *
+ * @param {number} [gridRows] rows the player currently owns
  */
-export function publicConfig() {
+export function publicConfig(gridRows = GRID_DEFAULT_ROWS) {
   return {
-    grid: { ...GRID },
+    grid: getGridForRows(gridRows),
     panelBaseW: PANEL_BASE_W,
     mounts: Object.fromEntries(
       Object.entries(MOUNT_TYPES).map(([id, def]) => [

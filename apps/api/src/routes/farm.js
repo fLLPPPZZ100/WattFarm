@@ -118,10 +118,15 @@ function validateLayout(mounts, owned, gridRows = GRID_DEFAULT_ROWS) {
  */
 router.get('/layout', verifyAuth, async (req, res) => {
   try {
-    const mounts = await prisma.placedMount.findMany({
-      where: { userId: req.uid },
-      orderBy: [{ row: 'asc' }, { col: 'asc' }],
-    });
+    const [mounts, user] = await Promise.all([
+      prisma.placedMount.findMany({
+        where: { userId: req.uid },
+        orderBy: [{ row: 'asc' }, { col: 'asc' }],
+      }),
+      // The row count is part of the rules the client renders from, so it has to
+      // travel with them rather than being assumed to be the default.
+      prisma.user.findUnique({ where: { id: req.uid }, select: { gridRows: true } }),
+    ]);
 
     const powerRate = computePowerRate(mounts);
 
@@ -129,7 +134,7 @@ router.get('/layout', verifyAuth, async (req, res) => {
       mounts: mounts.map(serialiseMount),
       powerRate,
       networkBaseline: env.NETWORK_POWER_BASELINE,
-      config: publicConfig(),
+      config: publicConfig(user?.gridRows ?? GRID_DEFAULT_ROWS),
     });
   } catch (err) {
     console.error('[farm/layout] read failed:', err);
@@ -190,6 +195,9 @@ router.put('/layout', verifyAuthStrict, configLimiter, async (req, res) => {
           mounts: stored.map(serialiseMount),
           powerRate: computePowerRate(stored),
           networkBaseline: env.NETWORK_POWER_BASELINE,
+          // Echoed so a save is also a chance for the client to notice a grid
+          // that grew in another tab.
+          config: publicConfig(gridRows),
         },
       };
     });

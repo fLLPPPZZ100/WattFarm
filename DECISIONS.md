@@ -8,11 +8,12 @@ English only, everywhere — copy, code, commits, docs. See
 | Route | Page | Notes |
 |---|---|---|
 | `/` | Farm | The game. Phaser canvas plus the power and payout panels |
-| `/shop` | Shop | Buy catalogue (`pages/MyAssets.jsx`) |
+| `/shop` | Shop | Buy catalogue (`pages/MyAssets.jsx`). Four shelves: Promotions, Generators, Supports, Expansion |
 | `/minigames` | Minigames | 3 game cards: Solar Swipe, Wind Clicker, Hydro Race |
 | `/wallet` | Wallet | Mining payout history + minigame activity summary |
 | `/profile` | Profile | Account details, nickname, password, avatar picker |
 | `/storage` | Storage | Owned items not currently placed |
+| `/referrals` | Referrals | Invite link, commission totals and history. Reached from the account menu, not the sidebar |
 | `/style-guide` | (removed in Phase 6) | Disposable test page for design tokens |
 
 Signing in always lands on `/`. The login page used to honour a `state.from`
@@ -35,17 +36,69 @@ are.
 - `hydro-race` — Hydro Race
 
 ## Asset types (matching AssetCatalog)
-- `solar` — Solar Panel (10 VLT base, 1.15× multiplier, 1 W/s)
-- `wind` — Wind Turbine (25 VLT base, 1.18× multiplier, 3 W/s)
-- `hydro` — Hydro Plant (60 VLT base, 1.22× multiplier, 8 W/s)
+What `prisma/seed.js` actually writes:
+
+- `solar` — Solar Panel (10 VLT base, **1× multiplier**, 1 W/s)
+- `panel-mount` — Single Mount (15 VLT base, 1× multiplier, 0 W/s, 1 bay)
+- `panel-mount-double` — Double Mount (45 VLT base, 1× multiplier, 0 W/s, 2 bays, +25% per panel)
+
+`wind` and `hydro` are **not** in the catalogue. They exist only as network
+budget lines in `services/miningPayout.js`, marked dormant because neither has a
+placeable asset yet.
+
+Prices are the single source of truth for the whole client: the Shop reads unit
+prices from `/api/assets/catalog` for everything the buy endpoint sells, and
+Storage prices inventory from the same response. Support prices used to be
+hardcoded in two pages, which is how the double mount came to be advertised at 25
+while the server charged 45.
 
 ## Price formula
 `currentPrice = basePrice × multiplier ^ quantityAlreadyBought`
 (calculated server-side on every request, never stored)
 
-## W calculation
-`accumulatedW = baseW × quantity × elapsedSecondsSince(lastCollected)`
-(computed on-the-fly via `wCalculator.js`, never stored in DB)
+The geometric machinery is implemented in `routes/assets.js`, including the
+series total for a multi-unit purchase. It is currently **inert**: every seeded
+`multiplier` is 1, and `multiplier <= 1` takes the flat path, so `currentPrice`
+always equals `basePrice`. Turning progression back on is a seed change, not a
+code change.
+
+## Power calculation
+`powerRate = Σ (panels installed on a mount × PANEL_BASE_W × (1 + mount bonus))`
+
+An instantaneous **rate**, computed from placed mounts by
+`services/powerCalculator.js`, never stored. Only what is installed on a mount
+counts; owning a panel produces nothing.
+
+This replaced an accumulated-watts model (`baseW × quantity × secondsSince
+(lastCollected)`, via a `wCalculator.js` that no longer exists) where placement
+was irrelevant and `lastCollected` was only written on purchase — so the
+stockpile grew without bound and buying an asset *reduced* your share. See the
+docblock in `powerCalculator.js` for the full account.
+
+## Payout
+`share = rate / (rate + NETWORK_POWER_BASELINE) × budget`
+
+Cron every 10 minutes. The synthetic baseline (40 W/s by default) stands in for
+network difficulty, which is what makes the first panel meaningful and gives
+diminishing returns as the farm grows. Solar's budget is 50 VLT per cycle; the
+wind and hydro budgets are not paid out while those networks are dormant.
+
+## Grid
+14 columns × 4 rows by default, expandable one row at a time to 8 via
+`POST /api/assets/expand-grid` at `50000 × 4^(rows - 4)` VLT.
+
+The row count is stored per player (`User.gridRows`), validated on every layout
+write, and reported to the client in the `config` of `GET /api/farm/layout` —
+which is what lets `FarmScene` draw a farm bigger than the default.
+
+The grid is anchored to the toolbar line and grows **upwards**, so an expansion
+adds a row at the far edge instead of shifting the rows already built. Because
+four 64px rows exactly fill the grass band in `background-game.png`, a taller
+grid needs more grass than the default fit shows: `FarmScene.layoutBackground`
+scales the background up and slides it down so the horizon always meets the top
+row. The trade is sky — at 8 rows only ~88px of it remains. The alternative was
+shrinking the tile, and downscaling 64px pixel art by a fractional factor
+destroys it.
 
 ## Cooldown tiers (minigames)
 | Plays today | Tier | Cooldown |
@@ -56,12 +109,18 @@ are.
 | 20+ | 3 | 10 minutes |
 
 ## Loot table
+Rolled server-side in `services/minigameEngine.js`; the three games share one
+table. Expected value is 0.55 VLT per play.
+
 | Result | Probability | VLT |
 |---|---|---|
-| none | 98.65% | 0 |
-| common | 1.00% | 5 |
-| rare | 0.30% | 25 |
+| none | 96.95% | 0 |
+| common | 2.50% | 10 |
+| rare | 0.50% | 50 |
 | epic | 0.05% | 100 |
+
+The minigames have no gameplay yet: a play is a request that rolls this table,
+and the three names are labels on the same roll.
 
 ## Profile identity
 - The nickname is Firebase's `displayName`, not a column of ours. Registration
