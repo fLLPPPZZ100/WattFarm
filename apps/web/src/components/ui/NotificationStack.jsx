@@ -1,21 +1,26 @@
 /**
  * The notification stack.
  *
- * Renders whatever `notificationStore` holds, top-left and stacked downwards.
- * Nothing calls this directly — push messages with `lib/notify.js` and they
- * appear here.
+ * Renders whatever `notificationStore` holds, pinned to the top-left of the
+ * viewport and stacked downwards. Nothing calls this directly — push messages
+ * with `lib/notify.js` and they appear here.
  *
- * Timing note. The countdown is not a `setTimeout`: the progress bar's own
- * animation is the clock, and the card is dismissed when that animation ends.
- * That buys three things a timer would have to reimplement:
+ * Two things worth knowing:
  *
- *   - hover pause for free (`animation-play-state: paused`), with no remaining
- *     time to track and no risk of the bar and the timer disagreeing
- *   - a bar that is always exactly in sync with the real deadline
- *   - zero re-renders while a notification is on screen
+ *   - It renders through a portal into `document.body`, so it is positioned
+ *     against the screen rather than against whatever container mounts it. That
+ *     is what lets it sit in the true top-left corner, above the sidebar and
+ *     header, instead of being trapped inside the content area.
+ *
+ *   - Auto-dismiss is a real timer, not the progress bar's `animationend`. The
+ *     bar is a visual only. An earlier version keyed dismissal off the bar's
+ *     animation ending, which silently failed whenever that event did not fire,
+ *     leaving notifications on screen forever. A timer that tracks its own
+ *     remaining time is dull but cannot get stuck.
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { useNotificationStore } from '../../store/notificationStore.js';
 import { AlertIcon, CheckIcon, CloseIcon, CrossIcon, InfoIcon } from './pixel.jsx';
@@ -70,13 +75,42 @@ function NotificationCard({ item, onDismiss, onRemoved }) {
   const { Icon } = variant;
 
   const cardRef = useRef(null);
-  const barRef = useRef(null);
   const [paused, setPaused] = useState(false);
 
   /**
-   * Safety net. Removal is normally driven by the exit animation ending; if that
-   * event never arrives — a `display: none` ancestor suppresses animations
-   * entirely — the card would keep a slot in the stack forever.
+   * Time left before this card dismisses itself, in milliseconds.
+   *
+   * A ref rather than state: it is written on every pause and never needs to
+   * trigger a render on its own — the bar's countdown is CSS, and the card only
+   * re-renders when it actually leaves.
+   */
+  const remainingRef = useRef(item.duration);
+
+  /**
+   * The auto-dismiss timer.
+   *
+   * Runs while the card is neither paused nor already leaving. On cleanup —
+   * which fires on pause, on unmount, and the moment `leaving` flips — it clears
+   * the pending timeout and banks however long this run was actually on screen,
+   * so resuming continues from where it stopped instead of restarting.
+   */
+  useEffect(() => {
+    if (item.leaving || paused) return undefined;
+
+    const startedAt = Date.now();
+    const timer = setTimeout(() => onDismiss(item.id), remainingRef.current);
+
+    return () => {
+      clearTimeout(timer);
+      remainingRef.current = Math.max(0, remainingRef.current - (Date.now() - startedAt));
+    };
+  }, [paused, item.leaving, item.id, onDismiss]);
+
+  /**
+   * Removes the card once it has finished animating out. The `animationend`
+   * below normally does this; the timer is the safety net for when that event
+   * never arrives (a `display: none` ancestor suppresses animations entirely),
+   * which would otherwise keep a dead slot in the stack.
    */
   useEffect(() => {
     if (!item.leaving) return undefined;
@@ -84,17 +118,10 @@ function NotificationCard({ item, onDismiss, onRemoved }) {
     return () => clearTimeout(timer);
   }, [item.leaving, item.id, onRemoved]);
 
-  /**
-   * One handler for all three animations on this card. They are told apart by
-   * event target rather than by `event.animationName`, which would couple this
-   * component to the keyframe names Tailwind happens to generate.
-   */
   function handleAnimationEnd(event) {
-    if (event.target === barRef.current) {
-      // The bar reaching zero *is* the timeout expiring.
-      onDismiss(item.id);
-      return;
-    }
+    // Only the card's own exit animation removes it — not the bar's, and not
+    // the entrance. Matching on the target keeps this decoupled from the
+    // keyframe names Tailwind generates.
     if (event.target === cardRef.current && item.leaving) {
       onRemoved(item.id);
     }
@@ -151,24 +178,17 @@ function NotificationCard({ item, onDismiss, onRemoved }) {
       </button>
 
       {/*
-        Time remaining, and the dismissal clock.
-      
-        The duration goes through `--toast-duration` rather than straight into
-        `animation-duration` because the reduced-motion rule in index.css has to
-        be able to restore it with `!important`, which would otherwise beat an
-        inline value and collapse the countdown to nothing.
-      
-        Pausing this pauses the dismissal, since they are the same mechanism. It
-        stays paused while leaving so a card on its way out cannot fire a second
-        dismissal.
+        Time-remaining bar. Purely a visual now that a timer owns dismissal, but
+        it shares the same duration and pauses on the same signal, so it tracks
+        the real countdown closely. Paused while leaving so it does not keep
+        draining as the card slides away.
       */}
       <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-bg-abyss">
         <span
-          ref={barRef}
           className={`block h-full origin-left animate-toast-drain ${variant.bar}`}
           style={{
             '--toast-duration': `${item.duration}ms`,
-            animationDuration: 'var(--toast-duration)',
+            animationDuration: `${item.duration}ms`,
             animationPlayState: paused || item.leaving ? 'paused' : 'running',
           }}
         />
@@ -178,25 +198,27 @@ function NotificationCard({ item, onDismiss, onRemoved }) {
 }
 
 /**
- * Mounted once, by `AppShell`, inside the content area — which is why it can be
- * positioned with plain `absolute left-4 top-4` and land exactly below the
- * header and beside the sidebar without repeating either of their measurements.
+ * Mounted once by `AppShell`. Rendered into `document.body` so it is positioned
+ * against the viewport — the fixed top-left corner of the screen — rather than
+ * against the content area it is written inside.
  *
- * The container ignores pointer events so it never steals a click from the farm
- * canvas underneath; each card re-enables them for itself.
+ * The container ignores pointer events so it never steals a click from anything
+ * beneath it; each card re-enables them for itself.
  */
 export default function NotificationStack() {
   const items = useNotificationStore((state) => state.items);
   const dismiss = useNotificationStore((state) => state.dismiss);
   const remove = useNotificationStore((state) => state.remove);
 
-  if (items.length === 0) return null;
+  // No document during SSR; harmless in this client-only app but cheap to guard.
+  if (typeof document === 'undefined' || items.length === 0) return null;
 
-  return (
-    <div className="pointer-events-none absolute left-4 top-4 z-50 flex w-[320px] flex-col gap-2">
+  return createPortal(
+    <div className="pointer-events-none fixed left-4 top-4 z-[60] flex w-[320px] max-w-[calc(100vw-2rem)] flex-col gap-2">
       {items.map((item) => (
         <NotificationCard key={item.id} item={item} onDismiss={dismiss} onRemoved={remove} />
       ))}
-    </div>
+    </div>,
+    document.body
   );
 }

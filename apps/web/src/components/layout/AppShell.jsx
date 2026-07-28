@@ -510,10 +510,9 @@ export default function AppShell() {
           )}
 
           {/*
-            Notifications. Last in the content area so it paints above the farm
-            canvas and the side panels, and inside it rather than fixed to the
-            viewport: being a child of this box is what puts it below the header
-            and beside the sidebar without hardcoding either of their sizes.
+            Notifications. Mounted here for lifecycle convenience, but it renders
+            through a portal into document.body, so it pins to the top-left of
+            the viewport regardless of where this sits in the tree.
           */}
           <NotificationStack />
         </div>
