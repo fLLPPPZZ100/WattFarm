@@ -2,6 +2,7 @@ import { Router } from 'express';
 import prisma from '../lib/prisma.js';
 import { verifyAuth, verifyAuthStrict } from '../middleware/verifyAuth.js';
 import { configLimiter } from '../middleware/rateLimit.js';
+import { withUserLock, UserNotFoundError } from '../lib/userLock.js';
 import { moneyToNumber } from '../lib/money.js';
 
 const router = Router();
@@ -83,28 +84,49 @@ router.post('/allocations', verifyAuthStrict, configLimiter, async (req, res) =>
       }
     }
 
-    // Delete existing allocations for user, then create new ones
-    await prisma.$transaction([
-      prisma.miningAllocation.deleteMany({ where: { userId: req.uid } }),
-      ...allocations.map((a) =>
-        prisma.miningAllocation.create({
-          data: {
-            userId: req.uid,
-            network: a.network,
-            percentage: a.percentage,
-          },
-        })
-      ),
-    ]);
+    /**
+     * Runs under the player's row lock, and upserts instead of
+     * delete-then-recreate.
+     *
+     * The previous version was the one economy write with no lock. It ran
+     * `deleteMany` and then `create` inside a transaction, which is atomic per
+     * transaction but not serialised between them: two concurrent requests could
+     * interleave their deletes and inserts and leave two rows for the same
+     * network. The payout iterates over rows, so that state paid the player
+     * twice every cycle, indefinitely.
+     *
+     * The unique constraint on (userId, network) now makes it impossible at the
+     * database level; the lock means the request never has to fail to discover
+     * that. Upserting also preserves `createdAt`, so a slider tweak no longer
+     * looks like a brand new allocation.
+     */
+    const updated = await withUserLock(req.uid, async (tx) => {
+      const submitted = allocations.map((a) => a.network);
 
-    // Return updated allocations
-    const updated = await prisma.miningAllocation.findMany({
-      where: { userId: req.uid },
-      orderBy: { network: 'asc' },
+      // Networks the player dropped from the split.
+      await tx.miningAllocation.deleteMany({
+        where: { userId: req.uid, network: { notIn: submitted } },
+      });
+
+      for (const a of allocations) {
+        await tx.miningAllocation.upsert({
+          where: { userId_network: { userId: req.uid, network: a.network } },
+          update: { percentage: a.percentage },
+          create: { userId: req.uid, network: a.network, percentage: a.percentage },
+        });
+      }
+
+      return tx.miningAllocation.findMany({
+        where: { userId: req.uid },
+        orderBy: { network: 'asc' },
+      });
     });
 
     res.json({ allocations: updated });
   } catch (err) {
+    if (err instanceof UserNotFoundError) {
+      return res.status(404).json({ error: 'User not found' });
+    }
     console.error('Set allocations error:', err);
     res.status(500).json({ error: 'Failed to update allocations' });
   }

@@ -52,7 +52,10 @@ async function describeEligibility() {
     if (allocations.length === 0) {
       console.log(
         `  ${c.yellow}${network}${c.reset}: no allocations — ` +
-          `set a percentage on the Profile page for anyone to earn from it`
+          (network === 'solar'
+            ? `every account should have one by default; run the ` +
+              `20260728140000_default_mining_allocation migration if this is unexpected`
+            : `nothing is allocated here, which is normal while ${network} has no placeable asset`)
       );
       continue;
     }

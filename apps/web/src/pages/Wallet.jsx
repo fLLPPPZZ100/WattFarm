@@ -71,8 +71,15 @@ export default function Wallet() {
         </h3>
 
         {payouts.length === 0 ? (
+          /*
+            No longer tells the player to "configure your mining allocations":
+            that screen is unmounted, so it was an instruction nobody could
+            follow. Every account now starts allocated to solar, so the only
+            thing actually required is a panel installed on a mount.
+          */
           <p className="text-text-muted text-sm">
-            No mining payouts yet. Configure your mining allocations and wait for the next payout cycle.
+            No mining payouts yet. Install a panel on a mount in your farm and wait for the next
+            payout cycle.
           </p>
         ) : (
           <div className="space-y-2">
