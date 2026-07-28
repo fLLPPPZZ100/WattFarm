@@ -17,7 +17,33 @@ import ethCoinImg from '../../assets/coins/eth-coin.png';
 import solCoinImg from '../../assets/coins/sol-coin.png';
 import { getAvatarImage } from '../../data/avatars.js';
 import profileIconImg from '../../assets/sprites/profile.png';
+import shopIconImg from '../../assets/sprites/shop.png';
 
+
+/**
+ * One icon slot, shared by the sidebar and the account menu.
+ *
+ * The slot is a fixed 32px box whether it holds pixel art or an emoji, so every
+ * label in a list starts at the same x position no matter which items have been
+ * converted yet.
+ *
+ * Sprites render at 32px, their native size — 1:1, no resampling. They are not
+ * scaled down to fit a smaller row: `image-rendering: pixelated` resolves a
+ * downscale by nearest neighbour, which throws away every other pixel and can
+ * erase a one-pixel detail completely. Emoji sit at 24px, which reads as roughly
+ * the same weight as a sprite that keeps a 4px transparent margin.
+ */
+function MenuIcon({ img, emoji }) {
+  return (
+    <span className="w-8 shrink-0 flex items-center justify-center">
+      {img ? (
+        <img src={img} alt="" width="32" height="32" style={{ imageRendering: 'pixelated' }} />
+      ) : (
+        <span className="text-2xl leading-none">{emoji}</span>
+      )}
+    </span>
+  );
+}
 
 /**
  * Phaser canvas size. Must match the game config — the side panels are placed
@@ -47,7 +73,7 @@ const CENTRED_ROW = {
 
 const NAV_LINKS = [
   { to: '/', label: 'Farm', icon: '🌱' },
-  { to: '/shop', label: 'Shop', icon: '🛒' },
+  { to: '/shop', label: 'Shop', img: shopIconImg },
   { to: '/minigames', label: 'Minigames', icon: '🎮' },
   { to: '/wallet', label: 'Wallet', icon: '💰' },
   { to: '/storage', label: 'Storage', icon: '📦' },
@@ -236,8 +262,8 @@ export default function AppShell() {
             {NAV_LINKS.map(function (link) {
               var active = location.pathname === link.to;
               return (
-                <Link key={link.to} to={link.to} className={'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ' + (active ? 'bg-accent-watt/10 text-accent-watt border border-accent-watt/20 font-semibold' : 'text-text-muted hover:text-text-primary hover:bg-bg-abyss/50 border border-transparent')}>
-                  <span className="text-base w-5 text-center">{link.icon}</span><span>{link.label}</span>
+                <Link key={link.to} to={link.to} className={'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ' + (active ? 'bg-accent-watt/10 text-accent-watt border border-accent-watt/20 font-semibold' : 'text-text-muted hover:text-text-primary hover:bg-bg-abyss/50 border border-transparent')}>
+                  <MenuIcon img={link.img} emoji={link.icon} /><span>{link.label}</span>
                   {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-accent-watt" />}
                 </Link>
               );
@@ -346,28 +372,12 @@ export default function AppShell() {
                       aria-label="Account"
                       className="absolute right-0 top-full mt-2 w-56 bg-bg-panel border border-line-dusk rounded-xl shadow-2xl z-40 overflow-hidden py-1"
                     >
-                      {/*
-                        The icon slot is 32px wide for every item in this menu so
-                        the labels stay on one vertical line, whatever sits in it.
-                        `profile.png` is 16x16 art drawn at 2x — an integer scale,
-                        which is the only kind that keeps pixel art sharp. 24px or
-                        20px would land the source pixels on fractions and soften
-                        the edges.
-                      */}
                       <button
                         type="button"
                         onClick={function () { goFromAccountMenu('/profile'); }}
                         className="w-full flex items-center gap-3 px-4 py-2 text-sm text-text-muted hover:text-text-primary hover:bg-bg-abyss/50 transition-colors"
                       >
-                        <span className="w-8 shrink-0 flex items-center justify-center">
-                          <img
-                            src={profileIconImg}
-                            alt=""
-                            width="32"
-                            height="32"
-                            style={{ imageRendering: 'pixelated' }}
-                          />
-                        </span>
+                        <MenuIcon img={profileIconImg} />
                         <span>Profile</span>
                       </button>
 
@@ -376,19 +386,15 @@ export default function AppShell() {
                         sidebar is the game loop (farm, shop, minigames, wallet,
                         storage) and an invite link is an account concern, like
                         the profile it sits next to. The `Soon` tag it used to
-                        carry is gone now that the route exists.
-                      */}
-                      {/*
-                        Still emoji until the pixel art for these two exists.
-                        Sized up to 24px and given the same 32px slot so they do
-                        not read as an afterthought next to the profile icon.
+                        carry is gone now that the route exists. Still emoji
+                        until pixel art exists for it and for Log out.
                       */}
                       <button
                         type="button"
                         onClick={function () { goFromAccountMenu('/referrals'); }}
                         className="w-full flex items-center gap-3 px-4 py-2 text-sm text-text-muted hover:text-text-primary hover:bg-bg-abyss/50 transition-colors"
                       >
-                        <span className="text-2xl leading-none w-8 shrink-0 text-center">🔗</span>
+                        <MenuIcon emoji="🔗" />
                         <span>Referrals</span>
                       </button>
 
@@ -399,7 +405,7 @@ export default function AppShell() {
                         onClick={function () { setAccountMenuOpen(false); handleLogout(); }}
                         className="w-full flex items-center gap-3 px-4 py-2 text-sm text-text-muted hover:text-red-400 hover:bg-red-400/5 transition-colors"
                       >
-                        <span className="text-2xl leading-none w-8 shrink-0 text-center">🚪</span>
+                        <MenuIcon emoji="🚪" />
                         <span>Log out</span>
                       </button>
                     </div>
