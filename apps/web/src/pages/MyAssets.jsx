@@ -74,25 +74,33 @@ var PROMOTIONS = [
   },
 ];
 
-var SUPPORTS = [
-  {
-    id: 'panel-mount',
+/**
+ * Support presentation, keyed by catalogue type.
+ *
+ * No prices here on purpose. These used to carry their own `price`, and the
+ * double mount's copy said 25 VLT while the catalogue charged 45 — so the card
+ * enabled Buy on a total the server then refused. Price now comes from
+ * `/api/assets/catalog` for supports exactly as it already did for generators,
+ * which removes the possibility of the two disagreeing.
+ */
+var SUPPORT_META = {
+  'panel-mount': {
     label: 'Single Mount',
     benefit: '1 PANEL SLOT',
-    price: 15,
     color: '#8B7355',
     img: mount1Img,
   },
-  {
-    id: 'panel-mount-double',
+  'panel-mount-double': {
     label: 'Double Mount',
     benefit: '2 PANEL SLOTS',
     benefitNote: '+25% panel output',
-    price: 25,
     color: '#8B7355',
     img: mount2Img,
   },
-];
+};
+
+/** Display order for the supports shelf. */
+var SUPPORT_ORDER = ['panel-mount', 'panel-mount-double'];
 
 var GENERATOR_META = {
   solar: { label: 'Solar Panel', color: '#F2B84B', img: solarPanelImg, baseW: 1 },
@@ -120,9 +128,7 @@ function accentFor({ isPromo, isGenerator }) {
  */
 function itemLabel(id) {
   if (GENERATOR_META[id]) return GENERATOR_META[id].label;
-  for (var i = 0; i < SUPPORTS.length; i++) {
-    if (SUPPORTS[i].id === id) return SUPPORTS[i].label;
-  }
+  if (SUPPORT_META[id]) return SUPPORT_META[id].label;
   return id;
 }
 
@@ -224,9 +230,15 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
   if (isGenerator) {
     var meta = GENERATOR_META[item.type] || {};
     powerW = item.baseW || meta.baseW || 0;
-    // Authoritative price from server (exponential pricing)
+  }
+
+  if (showPurchaseSystem) {
+    // Authoritative price from the server catalogue (exponential pricing).
+    // Applies to generators and supports alike — anything the buy endpoint
+    // actually sells is priced by the endpoint, never by this file.
     unitPrice = item.currentPrice || item.basePrice || 0;
   } else {
+    // Promotions are static placeholders with no catalogue row yet.
     unitPrice = item.price || 0;
   }
 
@@ -454,6 +466,18 @@ export default function Shop() {
 
   var genCatalog = catalog.filter(function (c) { return c.type === 'solar'; });
 
+  /**
+   * Supports, built from the catalogue in a fixed display order.
+   *
+   * Driving the shelf off the catalogue means a type the server does not sell
+   * simply does not appear, rather than rendering a card whose Buy is
+   * guaranteed to fail.
+   */
+  var supportCatalog = SUPPORT_ORDER.map(function (type) {
+    var entry = catalog.find(function (c) { return c.type === type; });
+    return entry ? { ...entry, id: type, ...SUPPORT_META[type] } : null;
+  }).filter(Boolean);
+
   // Section heading colour follows the active category's accent.
   var sectionAccent = activeCategory === 'promotions' ? '#F5923B' : activeCategory === 'supports' ? '#6FB7D6' : '#F2B84B';
 
@@ -587,7 +611,7 @@ export default function Shop() {
               <span className="h-px flex-1" style={{ background: withAlpha(sectionAccent, 0.28) }} />
             </div>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {SUPPORTS.map(function (item) {
+              {supportCatalog.map(function (item) {
                 return (
                   <ShopCard key={item.id} item={item} color={item.color} img={item.img}
                     owned={ownedMap[item.id] || 0} isSupport vltBalance={vltBalance} onBuy={handleBuy} loading={loading} />

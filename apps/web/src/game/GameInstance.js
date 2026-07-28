@@ -12,13 +12,20 @@ export function setPlacementCallback(fn) {
 /**
  * Reports the placed layout to React.
  *
- * @param {number} solarPlaced panels installed
- * @param {number} mountPlaced mounts installed
- * @param {number} [powerRate] W/s including mount bonuses
- * @param {number} [networkBaseline] synthetic competing power, from the server
+ * Takes an object rather than a positional list: the payload has grown to six
+ * fields, and `(panels, mounts, single, double, rate, baseline)` at the call
+ * site is impossible to read and easy to mis-order.
+ *
+ * @param {object} placement
+ * @param {number} placement.placedSolar panels installed
+ * @param {number} placement.placedMount mounts installed, both types
+ * @param {number} placement.placedMountSingle single mounts installed
+ * @param {number} placement.placedMountDouble double mounts installed
+ * @param {number} [placement.powerRate] W/s including mount bonuses
+ * @param {number} [placement.networkBaseline] synthetic competing power
  */
-export function notifyPlacementChange(solarPlaced, mountPlaced, powerRate, networkBaseline) {
-  if (onPlacementChange) onPlacementChange(solarPlaced, mountPlaced, powerRate, networkBaseline);
+export function notifyPlacementChange(placement) {
+  if (onPlacementChange) onPlacementChange(placement);
 }
 
 /**

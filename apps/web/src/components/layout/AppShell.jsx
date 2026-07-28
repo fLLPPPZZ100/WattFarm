@@ -94,7 +94,7 @@ const CYCLE_SECONDS = 600; // 10 minutes
 export default function AppShell() {
   const { user, account, logout } = useAuth();
   const { vltBalance, assets, fetchMining } = useAssetsStore();
-  const { placedSolar, placedMount, powerRate, networkBaseline } = usePlacementStore();
+  const { placedSolar, powerRate, networkBaseline } = usePlacementStore();
   const [activeCurrency, setActiveCurrency] = useState('VLT');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -128,13 +128,8 @@ export default function AppShell() {
     if (!user) return undefined;
 
     bootGame(user.uid);
-    setPlacementCallback(function (solarPlaced, mountPlaced, powerRate, networkBaseline) {
-      usePlacementStore.getState().setPlacement({
-        placedSolar: solarPlaced,
-        placedMount: mountPlaced,
-        powerRate: powerRate,
-        networkBaseline: networkBaseline,
-      });
+    setPlacementCallback(function (placement) {
+      usePlacementStore.getState().setPlacement(placement);
     });
 
     return function () {

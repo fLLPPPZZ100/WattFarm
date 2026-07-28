@@ -1081,14 +1081,21 @@ export default class FarmScene extends Phaser.Scene {
   }
 
   emitPlacement() {
-    notifyPlacementChange(
-      this.countPlacedPanels(),
-      this.countPlaced('mount_single') + this.countPlaced('mount_double'),
+    const single = this.countPlaced('mount_single');
+    const double = this.countPlaced('mount_double');
+
+    notifyPlacementChange({
+      placedSolar: this.countPlacedPanels(),
+      placedMount: single + double,
+      // Reported per type as well: Storage subtracts placed from owned for each
+      // asset type, which the combined total cannot answer.
+      placedMountSingle: single,
+      placedMountDouble: double,
       // Locally computed so the React panels update on the same frame as the
       // edit; the server's figure replaces it once the save returns.
-      this.totalPlacedOutput(),
-      this.networkBaseline
-    );
+      powerRate: this.totalPlacedOutput(),
+      networkBaseline: this.networkBaseline,
+    });
   }
 
   updateMountCount(mc) {
