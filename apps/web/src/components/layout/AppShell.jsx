@@ -16,6 +16,7 @@ import trxCoinImg from '../../assets/coins/trx-coin.png';
 import ethCoinImg from '../../assets/coins/eth-coin.png';
 import solCoinImg from '../../assets/coins/sol-coin.png';
 import { getAvatarImage } from '../../data/avatars.js';
+import profileIconImg from '../../assets/sprites/profile.png';
 
 
 const NAV_LINKS = [
@@ -319,12 +320,28 @@ export default function AppShell() {
                       aria-label="Account"
                       className="absolute right-0 top-full mt-2 w-56 bg-bg-panel border border-line-dusk rounded-xl shadow-2xl z-40 overflow-hidden py-1"
                     >
+                      {/*
+                        The icon slot is 32px wide for every item in this menu so
+                        the labels stay on one vertical line, whatever sits in it.
+                        `profile.png` is 16x16 art drawn at 2x — an integer scale,
+                        which is the only kind that keeps pixel art sharp. 24px or
+                        20px would land the source pixels on fractions and soften
+                        the edges.
+                      */}
                       <button
                         type="button"
                         onClick={function () { goFromAccountMenu('/profile'); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:text-text-primary hover:bg-bg-abyss/50 transition-colors"
+                        className="w-full flex items-center gap-3 px-4 py-2 text-sm text-text-muted hover:text-text-primary hover:bg-bg-abyss/50 transition-colors"
                       >
-                        <span className="text-base w-5 text-center">👤</span>
+                        <span className="w-8 shrink-0 flex items-center justify-center">
+                          <img
+                            src={profileIconImg}
+                            alt=""
+                            width="32"
+                            height="32"
+                            style={{ imageRendering: 'pixelated' }}
+                          />
+                        </span>
                         <span>Profile</span>
                       </button>
 
@@ -335,12 +352,17 @@ export default function AppShell() {
                         the profile it sits next to. The `Soon` tag it used to
                         carry is gone now that the route exists.
                       */}
+                      {/*
+                        Still emoji until the pixel art for these two exists.
+                        Sized up to 24px and given the same 32px slot so they do
+                        not read as an afterthought next to the profile icon.
+                      */}
                       <button
                         type="button"
                         onClick={function () { goFromAccountMenu('/referrals'); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:text-text-primary hover:bg-bg-abyss/50 transition-colors"
+                        className="w-full flex items-center gap-3 px-4 py-2 text-sm text-text-muted hover:text-text-primary hover:bg-bg-abyss/50 transition-colors"
                       >
-                        <span className="text-base w-5 text-center">🔗</span>
+                        <span className="text-2xl leading-none w-8 shrink-0 text-center">🔗</span>
                         <span>Referrals</span>
                       </button>
 
@@ -349,9 +371,9 @@ export default function AppShell() {
                       <button
                         type="button"
                         onClick={function () { setAccountMenuOpen(false); handleLogout(); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:text-red-400 hover:bg-red-400/5 transition-colors"
+                        className="w-full flex items-center gap-3 px-4 py-2 text-sm text-text-muted hover:text-red-400 hover:bg-red-400/5 transition-colors"
                       >
-                        <span className="text-base w-5 text-center">🚪</span>
+                        <span className="text-2xl leading-none w-8 shrink-0 text-center">🚪</span>
                         <span>Log out</span>
                       </button>
                     </div>
