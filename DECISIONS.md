@@ -84,6 +84,45 @@ are.
 - Distributed proportionally based on: player's effective W × allocation %
 - W is calculated via the same `wCalculator.js` used for display
 
+## Referrals
+- Invite links are `/login?r=CODE`. Codes are 8 characters from a 31-symbol
+  alphabet with the ambiguous glyphs (`0/O`, `1/I/L`) removed, drawn from
+  `crypto.randomInt` so they are neither guessable nor derived from the account.
+  Validation accepts `/^[A-Z0-9]{6,12}$/` — wider than the generator — because
+  the migration backfilled existing accounts with uppercase hex.
+- **Attribution happens only at account creation.** The code is passed in the
+  `create` branch of the `upsert` in `POST /api/auth/sync`; the `update` branch
+  never touches `referredById`. So a code sent by a returning player, or replayed
+  by someone else, is ignored. A referral cannot be added, changed or stolen once
+  the row exists.
+- An unknown or malformed code is ignored and registration proceeds. Failing the
+  signup would let a stale link lock someone out of creating an account.
+- Commissions are settled by a daily batch at 00:15 UTC for the previous UTC day,
+  not inline per event. Inline crediting would take a lock on a *second* user's
+  row inside the buy route, and two players who referred each other would
+  deadlock. The batch also gives a natural retry unit.
+- Idempotency is a database constraint, not application bookkeeping: `@@unique`
+  on `(referrerId, referredId, kind, periodDate)`. The runner inserts
+  optimistically and treats `P2002` as "already settled", so re-running after a
+  crash pays nothing twice. `scripts/run-referral-commissions.mjs --twice`
+  asserts this.
+- Commissions are newly minted VLT; the referred player is never debited.
+- There is deliberately **no endpoint that validates a code before signup** and
+  none that lists invitees by name or email. A validation endpoint is an
+  enumeration oracle, and the stats page identifies invitees by an opaque
+  6-character label because a referrer needs to trust the numbers, not to learn
+  who clicked the link.
+- Known residual risk: one person can run two accounts and refer themselves
+  through the second one, which is inherent to referral schemes. The mitigation
+  in place is `REQUIRE_VERIFIED_EMAIL`, which forces a distinct deliverable
+  address per account. A qualification threshold (say, no commission until the
+  invitee has placed N panels) is the next lever if it is abused.
+- `REFERRAL_PURCHASE_RATE` is worth a second look before trusting the default.
+  In RollerCoin the equivalent 15% is paid on real-money purchases, so it costs
+  the operator revenue and takes nothing out of the game economy. Here, purchases
+  are the main VLT sink, so a commission on them mints currency *and* weakens the
+  sink. Set it to 0 to keep commissions purely income-based.
+
 ## Auth flow
 - Firebase Auth handles identity (email/password + Google)
 - `POST /api/auth/sync` upserts user into Postgres on every auth state change

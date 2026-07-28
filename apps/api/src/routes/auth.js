@@ -4,8 +4,47 @@ import prisma from '../lib/prisma.js';
 import { verifyAuth } from '../middleware/verifyAuth.js';
 import { authSyncLimiter } from '../middleware/rateLimit.js';
 import { moneyToNumber } from '../lib/money.js';
+import { generateReferralCode, normaliseReferralCode } from '../lib/referralCode.js';
 
 const router = Router();
+
+/** How many times to retry account creation after a referral code collision. */
+const CODE_COLLISION_RETRIES = 5;
+
+/**
+ * Resolves a submitted referral code to the referrer's uid.
+ *
+ * ## Security notes
+ *
+ * - An unknown or malformed code resolves to `null` and registration continues
+ *   without attribution. Rejecting the signup instead would let a stale or
+ *   mistyped link block someone from creating an account entirely.
+ * - Self-referral is checked explicitly. It should be impossible — a code is
+ *   only minted *after* the row exists, so a brand new uid cannot already own
+ *   one — but the check costs nothing and the alternative is an account earning
+ *   commission on itself.
+ * - Nothing about the outcome is echoed back beyond a boolean, so this cannot be
+ *   used to test whether a given code exists. The response says whether *your*
+ *   signup was attributed, not whether the code was real.
+ *
+ * @param {unknown} rawCode
+ * @param {string} newUserId
+ * @returns {Promise<string | null>} referrer uid, or null
+ */
+async function resolveReferrer(rawCode, newUserId) {
+  const code = normaliseReferralCode(rawCode);
+  if (!code) return null;
+
+  const referrer = await prisma.user.findUnique({
+    where: { referralCode: code },
+    select: { id: true },
+  });
+
+  if (!referrer) return null;
+  if (referrer.id === newUserId) return null;
+
+  return referrer.id;
+}
 
 /**
  * Shapes the user row for the client. Keeps the response explicit so adding a
@@ -34,6 +73,13 @@ function serialiseUser(user) {
     avatarId: user.avatarId,
     unlockedAvatars: user.unlockedAvatars,
     createdAt: user.createdAt,
+    // The player's own invite code. Safe to expose: it is theirs to share, and
+    // it carries no information about the account.
+    referralCode: user.referralCode,
+    // Whether this account was invited by someone. The referrer's identity is
+    // deliberately not included — the invitee has no reason to learn who
+    // profits from them, and it would be a way to probe accounts.
+    wasReferred: Boolean(user.referredById),
   };
 }
 
@@ -49,25 +95,73 @@ router.post('/sync', verifyAuth, authSyncLimiter, async (req, res) => {
   const { uid, email, emailVerified } = req.auth;
 
   try {
-    const user = await prisma.user.upsert({
+    /**
+     * Referral attribution is resolved only when there is no row yet, and is
+     * passed only in the `create` branch below.
+     *
+     * That placement is the whole security model for attribution: `upsert` runs
+     * `create` exactly once, so a returning player syncing for the hundredth
+     * time — or an attacker replaying a sync with someone else's code — takes
+     * the `update` path, which never touches `referredById`. A referral cannot
+     * be added, changed or stolen after the account exists.
+     */
+    const existing = await prisma.user.findUnique({
       where: { id: uid },
-      // Only write the email when Firebase actually provided one, so a
-      // provider that omits it cannot blank out a previously known address.
-      update: email ? { email } : {},
-      create: {
-        id: uid,
-        // Explicit null (not '') — the column is uniquely indexed, and Postgres
-        // permits many NULLs but only one ''. The old default collided as soon
-        // as a second account without an email was created.
-        email: email ?? null,
-        // Only applied on create, so this is not a repeatable payout.
-        vltBalance: STARTING_VLT,
-      },
+      select: { id: true },
     });
+
+    const referredById = existing ? null : await resolveReferrer(req.body?.referralCode, uid);
+
+    let user = null;
+    let lastError = null;
+
+    // The referral code is unique, so creation can lose a race against another
+    // account drawing the same 8 characters. Astronomically unlikely; retried
+    // rather than surfaced, because there is nothing the player could do about
+    // it.
+    for (let attempt = 0; attempt < CODE_COLLISION_RETRIES; attempt += 1) {
+      try {
+        user = await prisma.user.upsert({
+          where: { id: uid },
+          // Only write the email when Firebase actually provided one, so a
+          // provider that omits it cannot blank out a previously known address.
+          update: email ? { email } : {},
+          create: {
+            id: uid,
+            // Explicit null (not '') — the column is uniquely indexed, and Postgres
+            // permits many NULLs but only one ''. The old default collided as soon
+            // as a second account without an email was created.
+            email: email ?? null,
+            // Only applied on create, so this is not a repeatable payout.
+            vltBalance: STARTING_VLT,
+            referralCode: generateReferralCode(),
+            ...(referredById ? { referredById, referredAt: new Date() } : {}),
+          },
+        });
+        break;
+      } catch (err) {
+        const isCodeCollision =
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002' &&
+          Array.isArray(err.meta?.target) &&
+          err.meta.target.includes('referralCode');
+
+        if (!isCodeCollision) throw err;
+
+        lastError = err;
+        console.warn(`[auth/sync] referral code collision, retrying (attempt ${attempt + 1})`);
+      }
+    }
+
+    if (!user) throw lastError ?? new Error('Could not allocate a referral code');
 
     return res.json({
       user: serialiseUser(user),
       emailVerified,
+      // Lets the signup UI confirm the invite was honoured. False also covers
+      // "code was invalid" and "you already had an account", on purpose: the
+      // client is told about its own outcome, not about the code.
+      referralApplied: Boolean(referredById),
     });
   } catch (err) {
     // Unique constraint violation: the address already belongs to a different

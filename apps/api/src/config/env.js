@@ -167,6 +167,49 @@ if (!Number.isFinite(NETWORK_POWER_BASELINE) || NETWORK_POWER_BASELINE < 0) {
   );
 }
 
+/* ── Referrals ── */
+/**
+ * Reads a commission rate expressed as a percentage and returns a fraction.
+ *
+ * Rates are capped at 100%: a rate above that would mint more currency than the
+ * activity it rewards, which is a runaway money printer rather than a
+ * configuration choice. A rate of 0 disables that commission kind.
+ */
+function commissionRate(name, fallback) {
+  const raw = process.env[name] ?? fallback;
+  const percent = Number.parseFloat(raw);
+
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+    problems.push(
+      `${name} must be a number between 0 and 100, as a percentage (received "${raw}")`
+    );
+    return 0;
+  }
+
+  return percent / 100;
+}
+
+/**
+ * Share of a referred player's mining payouts credited to their referrer.
+ *
+ * This is newly minted VLT, not a deduction: the referred player keeps their
+ * full payout. It therefore raises the total amount of currency the economy
+ * creates per cycle by this fraction for every referred player.
+ */
+const REFERRAL_MINING_RATE = commissionRate('REFERRAL_MINING_RATE', '25');
+
+/**
+ * Share of a referred player's *spending* credited to their referrer.
+ *
+ * Worth understanding before changing: in the game this mechanic is modelled on,
+ * the equivalent commission is paid on real-money purchases, so it costs the
+ * operator revenue and removes nothing from the game economy. Here, purchases
+ * are the economy's main VLT sink, so paying a commission on them both mints new
+ * currency *and* weakens the sink. Set to 0 to switch this off and keep the
+ * commission purely income-based.
+ */
+const REFERRAL_PURCHASE_RATE = commissionRate('REFERRAL_PURCHASE_RATE', '15');
+
 /* ── Report and abort ── */
 if (problems.length > 0) {
   const message = [
@@ -199,6 +242,8 @@ export const env = Object.freeze({
   CHECK_REVOKED_TOKENS,
   REQUIRE_VERIFIED_EMAIL,
   NETWORK_POWER_BASELINE,
+  REFERRAL_MINING_RATE,
+  REFERRAL_PURCHASE_RATE,
 });
 
 export default env;

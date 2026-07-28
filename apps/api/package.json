@@ -10,7 +10,8 @@
     "prisma:studio": "npx prisma studio",
     "check:avatars": "node scripts/check-avatar-catalogue.mjs",
     "test:concurrency": "node scripts/test-concurrency.mjs",
-    "payout:run": "node scripts/run-payout.mjs"
+    "payout:run": "node scripts/run-payout.mjs",
+    "referrals:settle": "node scripts/run-referral-commissions.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.17.0",
