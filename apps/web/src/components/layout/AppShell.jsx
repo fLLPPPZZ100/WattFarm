@@ -349,13 +349,11 @@ export default function AppShell() {
                         Referrals lives here rather than in the sidebar: the
                         sidebar is the game loop (farm, shop, minigames, wallet,
                         storage) and an invite link is an account concern, like
-                        the profile it sits next to. The `Soon` tag it used to
-                        carry is gone now that the route exists.
-                      */}
-                      {/*
-                        Still emoji until the pixel art for these two exists.
-                        Sized up to 24px and given the same 32px slot so they do
-                        not read as an afterthought next to the profile icon.
+                        the profile it sits next to.
+
+                        Still emoji until pixel art exists for it and for Log
+                        out. Sized to 24px in the same 32px slot so they do not
+                        read as an afterthought beside the profile icon.
                       */}
                       <button
                         type="button"
