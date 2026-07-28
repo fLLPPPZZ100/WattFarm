@@ -103,8 +103,8 @@ export default function Minigames() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-display text-2xl text-accent-watt tracking-wide">MINIGAMES</h2>
-        <p className="text-text-muted text-sm mt-1">
+        <h2 className="text-heading-xl text-accent-watt">MINIGAMES</h2>
+        <p className="text-body-sm text-text-muted mt-1">
           Play minigames to earn VLT. Cooldowns increase the more you play each day.
         </p>
       </div>
@@ -118,7 +118,7 @@ export default function Minigames() {
               : 'bg-accent-current/10 border-accent-current text-accent-current'
           }`}
         >
-          <span className="font-display tracking-wide">
+          <span className="text-heading-md">
             {GAME_INFO[result.game]?.label}
           </span>
           {' — '}
@@ -128,9 +128,9 @@ export default function Minigames() {
             <>
               <span className="font-bold uppercase">{result.result}</span>!
               Earned{' '}
-              <span className="font-mono text-accent-watt">{result.vltEarned} VLT</span>.
+              <span className="text-currency text-accent-watt">{result.vltEarned} VLT</span>.
               New balance:{' '}
-              <span className="font-mono">{result.newBalance.toFixed(1)} VLT</span>
+              <span className="text-currency">{result.newBalance.toFixed(1)} VLT</span>
             </>
           )}
         </div>
@@ -149,10 +149,10 @@ export default function Minigames() {
               {/* Emoji + label */}
               <div className="text-center">
                 <span className="text-4xl">{info.emoji}</span>
-                <h3 className="font-display text-sm text-text-primary tracking-wide mt-2">
+                <h3 className="text-heading-md text-text-primary mt-2">
                   {info.label}
                 </h3>
-                <p className="text-xs text-text-muted mt-1">{info.description}</p>
+                <p className="text-body-sm text-text-muted mt-1">{info.description}</p>
               </div>
 
               {/* Cooldown indicator */}
@@ -161,7 +161,7 @@ export default function Minigames() {
                   Plays today: <span className="text-text-primary">{g.playCountToday}</span>
                 </p>
                 <p
-                  className={`font-mono text-sm ${
+                  className={`text-timer ${
                     onCooldown ? 'text-red-400' : 'text-accent-current'
                   }`}
                 >

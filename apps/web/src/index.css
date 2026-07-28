@@ -2,9 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ════════════════════════════════════════════════════════════════════
+   TYPE SYSTEM
+
+   Three roles, one source of truth. Tailwind's font tokens point at these
+   variables (see tailwind.config.js), so `font-display`, `font-body` and
+   `font-mono` resolve here rather than naming a family in a dozen places.
+
+     --font-title  Pixelify Sans — identity only: wordmark, titles, buttons,
+                   the odd headline stat. Retro character where it earns its
+                   keep, never in a paragraph.
+     --font-ui     Inter — the interface: menus, labels, prose, inputs, cards,
+                   notifications, modals. Everything you actually read.
+     --font-mono   JetBrains Mono — every number that matters: VLT, W/s,
+                   timers, ids, counters. Tabular by default so they do not
+                   shift as digits change.
+
+   The Phaser canvas does NOT use these; it keeps the original pixel faces —
+   see apps/web/src/game/ui/pixelUi.js.
+   ════════════════════════════════════════════════════════════════════ */
+:root {
+  --font-title: 'Pixelify Sans', 'Silkscreen', system-ui, sans-serif;
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+
 @layer base {
   body {
-    font-family: 'Pixelify Sans', sans-serif;
+    font-family: var(--font-ui);
+    /* Inter reads a touch tighter and cleaner with these on. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.006em;
   }
 
   img {
@@ -12,19 +41,21 @@
     image-rendering: pixelated;
   }
 
-  /* Silkscreen only ships a small set of glyphs and looks muddy when the
-     browser hints it. Turning hinting off keeps the pixel grid intact.
-     
-     Deliberately not applied to .font-body or .font-mono. Pixelify Sans and
-     VT323 are outline fonts drawn to look pixelated, not true bitmaps: with
-     smoothing off they go ragged at any size that is not a whole multiple of
-     their internal grid, and body copy is exactly where that is least
-     forgivable. Silkscreen is only ever used for short uppercase runs, where
-     the hard edges are the point. */
+  /* The title face (Pixelify Sans) is an outline font drawn to look pixelated,
+     not a true bitmap, so it must keep smoothing on: turning it off leaves it
+     ragged at any size that is not a whole multiple of its internal grid. This
+     is the opposite of the old rule, which disabled smoothing for the bitmap
+     Silkscreen that used to fill this slot. Silkscreen now lives only on the
+     game canvas, which handles its own rendering. */
   .font-display {
-    -webkit-font-smoothing: none;
-    -moz-osx-font-smoothing: unset;
-    font-smooth: never;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Every number lines up in its column. JetBrains Mono is monospaced already;
+     this also holds for the rare proportional fallback. */
+  .font-mono {
+    font-variant-numeric: tabular-nums;
   }
 
   /* Respect users who ask for less motion: the CRT/scanline and float
@@ -53,6 +84,67 @@
 }
 
 @layer components {
+  /* ── Type scale ─────────────────────────────────────────────────
+     Reusable hierarchy so components stop restating font/size/weight/spacing
+     inline. Colour is intentionally left to the caller — the same heading is
+     watt-yellow on a page title and text-primary on a card — so these set
+     everything about the type except its hue.
+
+     Headings use the title face; body, labels and small print use the UI face;
+     stats, currency and timers use mono. */
+
+  .text-heading-xl {
+    font-family: var(--font-title);
+    @apply text-2xl font-semibold leading-tight tracking-wide;
+  }
+
+  .text-heading-lg {
+    font-family: var(--font-title);
+    @apply text-lg font-semibold leading-snug tracking-wide;
+  }
+
+  .text-heading-md {
+    font-family: var(--font-title);
+    @apply text-sm font-semibold leading-snug tracking-wide;
+  }
+
+  .text-body {
+    font-family: var(--font-ui);
+    @apply text-sm font-normal leading-relaxed;
+  }
+
+  .text-body-sm {
+    font-family: var(--font-ui);
+    @apply text-xs font-normal leading-relaxed;
+  }
+
+  /* Uppercase caption above a value or section. The letter-spacing is what
+     keeps small caps readable; the weight lifts it clear of body text. */
+  .text-label {
+    font-family: var(--font-ui);
+    @apply text-[10px] font-semibold uppercase leading-tight;
+    letter-spacing: 0.08em;
+  }
+
+  /* Numbers. Tabular figures so a live counter never nudges the layout. */
+  .text-stat {
+    font-family: var(--font-mono);
+    @apply text-lg font-semibold;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .text-currency {
+    font-family: var(--font-mono);
+    @apply text-sm font-medium;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .text-timer {
+    font-family: var(--font-mono);
+    @apply text-sm font-medium;
+    font-variant-numeric: tabular-nums;
+  }
+
   /* ── Pixel surfaces ─────────────────────────────────────────────
      A 2px hard border plus offset hard shadow reads as a bevelled 8-bit
      panel. No border-radius anywhere: rounded corners break the illusion. */
@@ -70,7 +162,10 @@
 
   /* ── Pixel inputs ───────────────────────────────────────────── */
   .pixel-input {
-    @apply w-full bg-bg-abyss border-2 px-3 py-2.5 font-mono text-sm text-text-primary
+    /* Inter, not mono: an email or nickname is prose, and the old monospaced
+       field made ordinary text look like a terminal entry. Numeric fields that
+       want mono opt in themselves. */
+    @apply w-full bg-bg-abyss border-2 px-3 py-2.5 font-ui text-sm text-text-primary
            outline-none transition-none;
     border-radius: 0;
     /* Sunken bevel: dark top/left, light bottom/right. */

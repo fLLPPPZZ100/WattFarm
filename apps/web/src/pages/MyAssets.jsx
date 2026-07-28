@@ -134,12 +134,12 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
 
       {/* Name + production */}
       <div>
-        <p className="font-display text-sm text-text-primary tracking-wide">{item.label || item.type}</p>
+        <p className="text-heading-md text-text-primary">{item.label || item.type}</p>
         {isGenerator && powerW > 0 && (
-          <p className="text-text-muted text-xs mt-0.5">+{powerW.toFixed(1)} W/s production</p>
+          <p className="text-body-sm text-text-muted mt-0.5">+{powerW.toFixed(1)} W/s production</p>
         )}
         {!isGenerator && item.description && (
-          <p className="text-text-muted text-xs mt-1 leading-tight">{item.description}</p>
+          <p className="text-body-sm text-text-muted mt-1 leading-tight">{item.description}</p>
         )}
       </div>
 
@@ -148,11 +148,11 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
         <div>
           {isPromo && item.originalPrice ? (
             <span>
-              <span className="font-mono text-base text-accent-watt">{fmtPrice(item.price)} VLT</span>
-              <span className="text-text-muted text-xs line-through ml-2">{fmtPrice(item.originalPrice)} VLT</span>
+              <span className="text-currency text-base text-accent-watt">{fmtPrice(item.price)} VLT</span>
+              <span className="text-body-sm text-text-muted line-through ml-2">{fmtPrice(item.originalPrice)} VLT</span>
             </span>
           ) : (
-            <span className="font-mono text-base text-accent-watt">{fmtPrice(unitPrice)} VLT</span>
+            <span className="text-currency text-base text-accent-watt">{fmtPrice(unitPrice)} VLT</span>
           )}
         </div>
       )}
@@ -195,12 +195,12 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
       {showPurchaseSystem && (
         <>
           {/* Unit price display */}
-          <p className="text-text-muted text-[11px] font-mono">
+          <p className="font-mono text-[11px] text-text-muted">
             Unit: {fmtPrice(unitPrice)} VLT
           </p>
 
           {/* Price pill */}
-          <div className={'flex items-center justify-center gap-1.5 py-2 rounded-lg border text-sm font-mono ' +
+          <div className={'flex items-center justify-center gap-1.5 py-2 rounded-lg border text-currency ' +
             (insufficient
               ? 'border-red-700/40 bg-red-900/10 text-red-400'
               : 'border-accent-watt/30 bg-accent-watt/5 text-accent-watt')}>
@@ -338,7 +338,7 @@ export default function Shop() {
           {/* GENERATORS */}
           {activeCategory === 'generators' && (
             <section>
-              <h2 className="font-display text-lg text-accent-watt tracking-wide mb-4">⚡ GENERATORS</h2>
+              <h2 className="text-heading-lg text-accent-watt mb-4">⚡ GENERATORS</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {genCatalog.map(function (item) {
                   var meta = GENERATOR_META[item.type] || {};
@@ -356,7 +356,7 @@ export default function Shop() {
           {/* PROMOTIONS */}
           {activeCategory === 'promotions' && (
             <section>
-              <h2 className="font-display text-lg text-accent-watt tracking-wide mb-4">🔥 PROMOTIONS</h2>
+              <h2 className="text-heading-lg text-accent-watt mb-4">🔥 PROMOTIONS</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {PROMOTIONS.map(function (item) {
                   return (
@@ -377,7 +377,7 @@ export default function Shop() {
           {/* SUPPORTS */}
           {activeCategory === 'supports' && (
             <section>
-              <h2 className="font-display text-lg text-accent-watt tracking-wide mb-4">🔧 SUPPORTS</h2>
+              <h2 className="text-heading-lg text-accent-watt mb-4">🔧 SUPPORTS</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {SUPPORTS.map(function (item) {
                   return (

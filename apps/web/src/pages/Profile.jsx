@@ -42,7 +42,7 @@ export default function Profile() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-display text-2xl text-accent-watt tracking-wide">PROFILE</h2>
+        <h2 className="text-heading-xl text-accent-watt">PROFILE</h2>
       </div>
 
       {/* Identity, membership dates, nickname and password */}
@@ -50,8 +50,8 @@ export default function Profile() {
 
       {/* Avatar */}
       <div className="bg-bg-panel border border-line-dusk rounded-lg p-6">
-        <h3 className="font-display text-sm text-text-primary tracking-wide mb-4">AVATAR</h3>
-        <p className="text-text-muted text-xs mb-6">
+        <h3 className="text-heading-md text-text-primary mb-4">AVATAR</h3>
+        <p className="text-body-sm text-text-muted mb-6">
           Choose your avatar. It is applied straight away and shows up in the header.
         </p>
         <AvatarPicker

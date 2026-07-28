@@ -144,21 +144,36 @@ are.
 - `apps/api/.env`: `DATABASE_URL`, `GOOGLE_APPLICATION_CREDENTIALS` or `FIREBASE_SERVICE_ACCOUNT_JSON`
 
 ## Fonts
-All three are pixel typefaces. The interface is 2D throughout — 8-bit panels,
-hard shadows, no border radius, a CRT scanline overlay — and Inter sitting in the
-middle of that was the one element that read as a different product.
 
-- Display: **Silkscreen** — section titles, buttons, W and VLT labels. A true
-  bitmap face, so it is the only one with font smoothing switched off.
-- Body: **Pixelify Sans** — forms, menus, paragraphs. Chosen over the other pixel
-  faces because it stays legible at paragraph length and has a real weight axis
-  (400..700), which Silkscreen and VT323 do not.
-- Mono: **VT323** — live counters, balances, inputs. Genuinely monospaced, which
-  is the entire reason this slot exists: a proportional font makes a ticking
-  counter jump as digit widths change. It replaced JetBrains Mono, which held the
-  same job but was not a pixel face.
+Two surfaces, two rules.
 
-Smoothing is left on for body and mono on purpose. Pixelify Sans and VT323 are
-outline fonts drawn to *look* pixelated rather than true bitmaps, so disabling
-smoothing makes them ragged at any size that is not a whole multiple of their
-internal grid.
+**The surrounding UI** (menus, cards, forms, notifications, tables) is now set
+in a three-role system. An all-pixel interface looked the part but cost reading
+speed: long copy in a pixel face and numbers in a proportional one are exactly
+where the style stops paying for itself.
+
+- Title — **Pixelify Sans** (`--font-title`). Identity only: the wordmark, page
+  and section titles, buttons, the occasional headline value. Kept on the
+  `font-display` / `text-heading-*` tokens, so it is deliberate and scarce
+  rather than the default. Smoothing stays **on**: it is an outline face drawn
+  to look pixelated, not a bitmap, and goes ragged with smoothing off.
+- UI — **Inter** (`--font-ui`). The body of the interface and the default for
+  anything without an explicit family: prose, labels, inputs, descriptions,
+  cards, notifications, modals. This is the change that buys the legibility.
+- Mono — **JetBrains Mono** (`--font-mono`). Every number that matters: VLT,
+  W/s, timers, ids, counters. Tabular figures, so a ticking value never nudges
+  the layout — the reason a mono slot exists at all. It replaces VT323 in the
+  UI; VT323 was monospaced but not built for reading long ids.
+
+The three roles are CSS variables in `index.css` (`:root`), and Tailwind's
+`font-*` tokens resolve to them, so nothing names a family inline. The reusable
+`.text-heading-xl/lg/md`, `.text-body`, `.text-body-sm`, `.text-label`,
+`.text-stat`, `.text-currency` and `.text-timer` classes carry the size, weight
+and spacing for each level of the hierarchy.
+
+**The Phaser farm canvas** keeps the original pixel faces — **Silkscreen** for
+labels, **Pixelify Sans** for prose, **VT323** for numbers — via its own
+constants in `apps/web/src/game/ui/pixelUi.js`. That surface is the game world
+itself, where the 8-bit character earns its place, and it draws straight to the
+canvas without inheriting the CSS. All five families are therefore loaded: three
+for the UI, and Silkscreen/VT323 additionally for the canvas.

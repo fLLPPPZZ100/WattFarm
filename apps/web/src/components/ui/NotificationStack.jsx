@@ -154,13 +154,9 @@ function NotificationCard({ item, onDismiss, onRemoved }) {
         </span>
 
         <div className="min-w-0 flex-1">
-          <p
-            className={`font-display text-[10px] uppercase leading-tight tracking-widest ${variant.accent}`}
-          >
-            {item.title}
-          </p>
+          <p className={`text-label ${variant.accent}`}>{item.title}</p>
           {item.description && (
-            <p className="mt-1.5 break-words text-[11px] leading-snug text-text-muted">
+            <p className="mt-1.5 break-words text-body-sm leading-snug text-text-muted">
               {item.description}
             </p>
           )}

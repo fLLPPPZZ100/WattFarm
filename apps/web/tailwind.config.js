@@ -20,22 +20,30 @@ export default {
         'danger-crt': '#FF5C5C',
       },
       /**
-       * Every family is a pixel typeface — the interface is 2D throughout, so a
-       * smooth humanist sans in the middle of it read as a different product.
+       * Font tokens resolve to CSS variables defined in index.css (:root), so
+       * the three roles have a single source of truth and this file never names
+       * a family directly. See the TYPE SYSTEM block there.
        *
-       * display — Silkscreen. Chunky bitmap caps for titles and buttons.
-       * body    — Pixelify Sans. The only pixel face here that stays legible in
-       *           a paragraph, and it has a real weight axis (400..700), which
-       *           Silkscreen and VT323 do not.
-       * mono    — VT323. Genuinely monospaced, which is the whole reason this
-       *           slot exists: live counters must not jump as digits change
-       *           width. A proportional pixel font would reintroduce that
-       *           shift.
+       *   title / display — Pixelify Sans (var(--font-title)). Identity only:
+       *                     wordmark, page and section titles, buttons. `display`
+       *                     is kept as an alias so the existing `font-display`
+       *                     usages carry straight over.
+       *   ui / body / sans — Inter (var(--font-ui)). The interface itself, and
+       *                     the default for anything without an explicit family.
+       *   mono            — JetBrains Mono (var(--font-mono)). Every number that
+       *                     matters; tabular so counters do not shift.
+       *
+       * The Phaser canvas is deliberately excluded — it keeps Silkscreen / VT323
+       * via its own constants in game/ui/pixelUi.js, because it is the game world
+       * and does not read the CSS.
        */
       fontFamily: {
-        display: ['Silkscreen', 'monospace'],
-        body: ['"Pixelify Sans"', 'sans-serif'],
-        mono: ['VT323', 'monospace'],
+        sans: ['var(--font-ui)', 'sans-serif'],
+        title: ['var(--font-title)', 'sans-serif'],
+        display: ['var(--font-title)', 'sans-serif'],
+        ui: ['var(--font-ui)', 'sans-serif'],
+        body: ['var(--font-ui)', 'sans-serif'],
+        mono: ['var(--font-mono)', 'monospace'],
       },
       boxShadow: {
         // Hard-edged shadows only — no blur, so everything stays crisp at

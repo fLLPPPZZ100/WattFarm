@@ -7,15 +7,25 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!--
-      All three families are pixel typefaces, so nothing in the interface falls
-      back to a smooth modern sans. Inter and JetBrains Mono used to sit here and
-      were the one part of the UI that did not match the 8-bit surfaces.
+      Five families, in two groups.
 
-      Pixelify Sans ships a variable weight axis, so 400..700 is one file rather
-      than four. VT323 is single weight by design.
+      The surrounding UI (menus, cards, forms, notifications) is set in Inter,
+      with JetBrains Mono for every number so counters do not jump as digit
+      widths change, and Pixelify Sans reserved for identity: the wordmark, page
+      and section titles, and buttons. That mix keeps the retro character where
+      it adds personality and hands the reading work to a face built for it.
+
+      Silkscreen and VT323 stay loaded for the Phaser farm canvas only. That
+      surface is the game world itself and is drawn entirely in the original
+      pixel faces; it does not inherit the CSS, so it needs its own fonts
+      present. See apps/web/src/game/ui/pixelUi.js.
+
+      Weight axes: Inter and Pixelify Sans ship variable weights (one file
+      each); JetBrains Mono is pinned to the three weights the UI uses; VT323 is
+      single weight by design.
     -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Silkscreen:wght@400;700&family=VT323&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Pixelify+Sans:wght@400..700&family=Silkscreen:wght@400;700&family=VT323&display=swap"
       rel="stylesheet"
     />
   </head>

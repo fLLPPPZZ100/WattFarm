@@ -63,7 +63,7 @@ export default function EmailVerificationBanner() {
     <div className="shrink-0 border-b-2 border-accent-watt/40 bg-accent-watt/10 px-6 py-2.5">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <p className="flex-1 text-[11px] leading-snug text-text-primary">
-          <span className="font-display mr-2 text-[9px] uppercase tracking-widest text-accent-watt">
+          <span className="text-label mr-2 text-accent-watt">
             Verify your email
           </span>
           Confirm <span className="font-mono text-accent-watt">{user.email}</span> to buy items and

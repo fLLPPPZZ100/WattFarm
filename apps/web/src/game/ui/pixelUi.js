@@ -38,14 +38,18 @@ export const CSS = {
 };
 
 /**
- * Must stay in step with `fontFamily` in tailwind.config.js and the Google
- * Fonts link in index.html.
+ * The canvas font stack is intentionally its own thing.
  *
- * Phaser draws text to the canvas with its own font stack, so it does not
- * inherit anything from the CSS. When the web UI moved off Inter and JetBrains
- * Mono those families stopped being loaded at all, which would have left the
- * in-game text falling back to a system font — smooth, unrelated, and the exact
- * mismatch this module exists to avoid.
+ * Phaser draws text straight to the canvas and inherits nothing from the CSS,
+ * so these are named here rather than read from the type-system variables the
+ * web UI uses. And they should stay pixel: this surface is the game world, the
+ * one place the 8-bit character is the point, so it keeps Silkscreen / Pixelify
+ * Sans / VT323 even though the surrounding interface has moved to Inter and
+ * JetBrains Mono for readability.
+ *
+ * All three are loaded by the Google Fonts link in index.html; Silkscreen and
+ * VT323 are loaded *for this canvas specifically* — the DOM UI no longer uses
+ * them. Keep that link in step if these change.
  */
 export const FONT_DISPLAY = '"Silkscreen", monospace';
 export const FONT_BODY = '"Pixelify Sans", sans-serif';

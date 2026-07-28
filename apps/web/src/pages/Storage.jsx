@@ -57,8 +57,8 @@ export default function Storage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-display text-2xl text-accent-watt tracking-wide">STORAGE</h2>
-        <p className="text-text-muted text-sm mt-1">{totalItems} items in inventory</p>
+        <h2 className="text-heading-xl text-accent-watt">STORAGE</h2>
+        <p className="text-body-sm text-text-muted mt-1">{totalItems} items in inventory</p>
       </div>
 
       <div className="flex gap-6">
@@ -83,7 +83,7 @@ export default function Storage() {
           {/* GENERATORS */}
           {activeCategory === 'generators' && (
             <section>
-              <h3 className="font-display text-sm text-text-primary tracking-wide mb-4 uppercase">⚡ Generators</h3>
+              <h3 className="text-heading-md text-text-primary mb-4 uppercase">⚡ Generators</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {Object.keys(GENERATOR_META).map(function (type) {
                   var meta = GENERATOR_META[type];
@@ -98,8 +98,8 @@ export default function Storage() {
                         )}
                       </div>
                       <div className="text-center w-full">
-                        <p className="font-display text-sm text-text-primary tracking-wide">{meta.label}</p>
-                        <p className="text-text-muted text-xs mt-0.5">{meta.wps} W/s per unit</p>
+                        <p className="text-heading-md text-text-primary">{meta.label}</p>
+                        <p className="text-body-sm text-text-muted mt-0.5">{meta.wps} W/s per unit</p>
                       </div>
                       <span className="font-mono text-xl text-accent-watt">×{qty}</span>
                       {qty > 0 ? (
@@ -119,7 +119,7 @@ export default function Storage() {
           {/* SUPPORTS */}
           {activeCategory === 'supports' && (
             <section>
-              <h3 className="font-display text-sm text-text-primary tracking-wide mb-4 uppercase">🔧 Supports & Equipment</h3>
+              <h3 className="text-heading-md text-text-primary mb-4 uppercase">🔧 Supports & Equipment</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {SUPPORTS.map(function (item) {
                   var qty = ownedMap[item.id] || 0;
@@ -135,8 +135,8 @@ export default function Storage() {
                         )}
                       </div>
                       <div>
-                        <p className="font-display text-sm text-text-primary tracking-wide">{item.label}</p>
-                        <p className="text-text-muted text-xs mt-1 leading-tight">{item.description}</p>
+                        <p className="text-heading-md text-text-primary">{item.label}</p>
+                        <p className="text-body-sm text-text-muted mt-1 leading-tight">{item.description}</p>
                       </div>
                       {hasItem ? (
                         <>
@@ -159,7 +159,7 @@ export default function Storage() {
           {/* BOOSTERS */}
           {activeCategory === 'boosters' && (
             <section>
-              <h3 className="font-display text-sm text-text-primary tracking-wide mb-4 uppercase">🚀 Boosters</h3>
+              <h3 className="text-heading-md text-text-primary mb-4 uppercase">🚀 Boosters</h3>
               <div className="bg-bg-panel border border-dashed border-line-dusk rounded-xl p-8 text-center">
                 <p className="text-text-muted text-sm">Boosters coming soon.</p>
               </div>

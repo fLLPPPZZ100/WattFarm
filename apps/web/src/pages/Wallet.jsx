@@ -52,8 +52,8 @@ export default function Wallet() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-display text-2xl text-accent-watt tracking-wide">WALLET</h2>
-        <p className="text-text-muted text-sm mt-1">
+        <h2 className="text-heading-xl text-accent-watt">WALLET</h2>
+        <p className="text-body-sm text-text-muted mt-1">
           Track your VLT earnings from mining payouts and minigame rewards.
         </p>
       </div>
@@ -66,7 +66,7 @@ export default function Wallet() {
 
       {/* Mining Payout History */}
       <div className="bg-bg-panel border border-line-dusk rounded-lg p-6">
-        <h3 className="font-display text-sm text-text-primary tracking-wide mb-4">
+        <h3 className="text-heading-md text-text-primary mb-4">
           MINING PAYOUTS
         </h3>
 
@@ -96,7 +96,7 @@ export default function Wallet() {
                     {new Date(p.timestamp).toLocaleString()}
                   </p>
                 </div>
-                <span className="font-mono text-sm text-accent-watt">
+                <span className="text-currency text-accent-watt">
                   +{p.amount.toFixed(2)} VLT
                 </span>
               </div>
@@ -107,7 +107,7 @@ export default function Wallet() {
 
       {/* Minigame Activity Summary */}
       <div className="bg-bg-panel border border-line-dusk rounded-lg p-6">
-        <h3 className="font-display text-sm text-text-primary tracking-wide mb-4">
+        <h3 className="text-heading-md text-text-primary mb-4">
           MINIGAME ACTIVITY TODAY
         </h3>
 

@@ -290,7 +290,7 @@ export default function AppShell() {
                   className={'flex items-center gap-3 bg-bg-abyss px-4 py-2.5 border border-line-dusk hover:border-accent-watt/40 cursor-pointer ' + (dropdownOpen ? 'rounded-t-xl border-b border-b-transparent' : 'rounded-xl')}
                 >
                   <img src={active.img} alt={active.label} width="32" height="32" style={{ imageRendering: 'pixelated', filter: 'drop-shadow(0 0 6px rgba(242,184,75,0.5))' }} />
-                  <span className="font-mono text-base font-medium text-accent-watt">{active.format(balances[activeCurrency])} {active.label}</span>
+                  <span className="text-currency text-base text-accent-watt">{active.format(balances[activeCurrency])} {active.label}</span>
                   <span className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white/5 cursor-pointer transition-colors text-text-muted text-xs">▼</span>
                 </button>
 
@@ -443,13 +443,13 @@ export default function AppShell() {
               >
                 <div className="flex flex-col gap-3 bg-bg-panel/80 backdrop-blur-sm border border-line-dusk rounded-xl p-4 w-[176px]">
                   <div>
-                    <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Your Power</p>
-                    <p className="font-mono text-sm text-accent-current">{totalPower.toFixed(1)} W/s</p>
-                    <p className="text-[10px] text-text-muted mt-0.5">{activeSolar} panels placed</p>
+                    <p className="text-label text-text-muted mb-0.5">Your Power</p>
+                    <p className="text-stat text-sm text-accent-current">{totalPower.toFixed(1)} W/s</p>
+                    <p className="text-body-sm text-text-muted mt-0.5">{activeSolar} panels placed</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Network Power</p>
-                    <p className="font-mono text-sm text-text-primary">{networkTotal.toFixed(1)} W/s</p>
+                    <p className="text-label text-text-muted mb-0.5">Network Power</p>
+                    <p className="text-stat text-sm text-text-primary">{networkTotal.toFixed(1)} W/s</p>
                     {/* Share bar — the payout is proportional to this. */}
                     <div className="mt-1 h-1.5 w-full bg-bg-abyss border border-line-dusk">
                       <div
@@ -457,17 +457,17 @@ export default function AppShell() {
                         style={{ width: Math.min(100, networkShare * 100).toFixed(1) + '%' }}
                       />
                     </div>
-                    <p className="text-[10px] text-accent-current mt-0.5 font-mono">
+                    <p className="font-mono text-[10px] text-accent-current mt-0.5">
                       {(networkShare * 100).toFixed(1)}% share
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Next Payout</p>
-                    <p className="font-mono text-sm text-accent-watt">{countdownStr}</p>
+                    <p className="text-label text-text-muted mb-0.5">Next Payout</p>
+                    <p className="text-timer text-accent-watt">{countdownStr}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Est. Reward</p>
-                    <p className="font-mono text-sm text-accent-watt">{blockReward.toFixed(2)} VLT</p>
+                    <p className="text-label text-text-muted mb-0.5">Est. Reward</p>
+                    <p className="text-currency text-accent-watt">{blockReward.toFixed(2)} VLT</p>
                   </div>
                 </div>
               </div>

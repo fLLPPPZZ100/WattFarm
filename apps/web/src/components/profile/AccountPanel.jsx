@@ -17,7 +17,7 @@ const MIN_PASSWORD_LENGTH = 8;
 function Field({ label, children, mono = false }) {
   return (
     <div className="bg-bg-abyss border border-line-dusk rounded-lg px-4 py-3">
-      <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-label text-text-muted mb-1">{label}</p>
       <p
         className={
           'text-text-primary break-all ' + (mono ? 'font-mono text-xs' : 'text-sm font-semibold')
@@ -173,7 +173,7 @@ export default function AccountPanel() {
 
   return (
     <div className="bg-bg-panel border border-line-dusk rounded-lg p-6 space-y-5">
-      <h3 className="font-display text-sm text-text-primary tracking-wide">ACCOUNT</h3>
+      <h3 className="text-heading-md text-text-primary">ACCOUNT</h3>
 
       {/* Identity header: avatar + nickname */}
       <div className="flex items-center gap-4">
@@ -190,8 +190,8 @@ export default function AccountPanel() {
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Nickname</p>
-          <p className="font-display text-lg text-accent-watt truncate">
+          <p className="text-label text-text-muted mb-1">Nickname</p>
+          <p className="text-heading-lg text-accent-watt truncate">
             {currentNickname || <span className="text-text-muted">No nickname</span>}
           </p>
           {!editingNickname && (

@@ -71,11 +71,11 @@ function CopyButton({ value, label, what }) {
 function StatCard({ label, value, hint, accent }) {
   return (
     <div className="rounded-xl border border-line-dusk bg-bg-abyss p-5">
-      <p className="text-text-muted text-[10px] uppercase tracking-wider mb-1">{label}</p>
-      <p className={'font-mono text-xl ' + (accent ? 'text-accent-watt' : 'text-text-primary')}>
+      <p className="text-label text-text-muted mb-1">{label}</p>
+      <p className={'text-stat ' + (accent ? 'text-accent-watt' : 'text-text-primary')}>
         {value}
       </p>
-      {hint && <p className="text-text-muted text-[11px] mt-1">{hint}</p>}
+      {hint && <p className="text-body-sm text-text-muted mt-1">{hint}</p>}
     </div>
   );
 }
@@ -164,8 +164,8 @@ export default function Referrals() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-display text-2xl text-accent-watt tracking-wide">REFERRALS</h2>
-        <p className="text-text-muted text-sm mt-1">
+        <h2 className="text-heading-xl text-accent-watt">REFERRALS</h2>
+        <p className="text-body-sm text-text-muted mt-1">
           Invite other players and earn {miningRate} of what they mine
           {purchasesEnabled ? ` and ${purchaseRate} of what they spend` : ''}. Their earnings are
           never reduced — your commission is paid on top.
@@ -174,11 +174,11 @@ export default function Referrals() {
 
       {/* Invite link */}
       <div className="bg-bg-panel border border-line-dusk rounded-lg p-6 space-y-4">
-        <h3 className="font-display text-sm text-text-primary tracking-wide">YOUR INVITE LINK</h3>
+        <h3 className="text-heading-md text-text-primary">YOUR INVITE LINK</h3>
 
         <div className="flex items-start gap-3 flex-wrap">
           <div className="flex-1 min-w-[240px]">
-            <p className="text-text-muted text-[10px] uppercase tracking-wider mb-1">Link</p>
+            <p className="text-label text-text-muted mb-1">Link</p>
             <p className="font-mono text-xs text-text-primary break-all bg-bg-abyss border border-line-dusk rounded px-3 py-2">
               {link}
             </p>
@@ -190,7 +190,7 @@ export default function Referrals() {
 
         <div className="flex items-start gap-3 flex-wrap">
           <div className="flex-1 min-w-[240px]">
-            <p className="text-text-muted text-[10px] uppercase tracking-wider mb-1">Code</p>
+            <p className="text-label text-text-muted mb-1">Code</p>
             <p className="font-mono text-lg text-accent-watt tracking-[0.2em] bg-bg-abyss border border-line-dusk rounded px-3 py-2 inline-block">
               {data.referralCode}
             </p>
@@ -230,7 +230,7 @@ export default function Referrals() {
 
       {/* Invited players */}
       <div className="bg-bg-panel border border-line-dusk rounded-lg p-6">
-        <h3 className="font-display text-sm text-text-primary tracking-wide mb-1">
+        <h3 className="text-heading-md text-text-primary mb-1">
           INVITED PLAYERS
         </h3>
         <p className="text-text-muted text-[11px] mb-4">
@@ -269,7 +269,7 @@ export default function Referrals() {
 
       {/* Commission history */}
       <div className="bg-bg-panel border border-line-dusk rounded-lg p-6">
-        <h3 className="font-display text-sm text-text-primary tracking-wide mb-4">
+        <h3 className="text-heading-md text-text-primary mb-4">
           COMMISSION HISTORY
         </h3>
 
