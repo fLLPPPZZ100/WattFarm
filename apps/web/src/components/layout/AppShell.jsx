@@ -24,7 +24,6 @@ const NAV_LINKS = [
   { to: '/minigames', label: 'Minigames', icon: '🎮' },
   { to: '/wallet', label: 'Wallet', icon: '💰' },
   { to: '/storage', label: 'Storage', icon: '📦' },
-  { to: '/referrals', label: 'Referrals', icon: '🤝' },
 ];
 
 const CURRENCIES = [
@@ -330,21 +329,19 @@ export default function AppShell() {
                       </button>
 
                       {/*
-                        Referrals has no route yet, so it is rendered disabled
-                        rather than as a link that goes nowhere — a menu item
-                        that silently does nothing reads as a bug. The `Soon`
-                        tag carries that state as text, rather than leaving it
-                        to the dimmed colour alone; a `title` tooltip would not
-                        do, since browsers suppress those on disabled controls.
+                        Referrals lives here rather than in the sidebar: the
+                        sidebar is the game loop (farm, shop, minigames, wallet,
+                        storage) and an invite link is an account concern, like
+                        the profile it sits next to. The `Soon` tag it used to
+                        carry is gone now that the route exists.
                       */}
                       <button
                         type="button"
-                        disabled
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted/40 cursor-not-allowed"
+                        onClick={function () { goFromAccountMenu('/referrals'); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:text-text-primary hover:bg-bg-abyss/50 transition-colors"
                       >
                         <span className="text-base w-5 text-center">🔗</span>
                         <span>Referrals</span>
-                        <span className="ml-auto text-[10px] uppercase tracking-wider border border-line-dusk rounded px-1.5 py-0.5">Soon</span>
                       </button>
 
                       <div className="my-1 border-t border-line-dusk" />
