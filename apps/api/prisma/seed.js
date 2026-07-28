@@ -12,7 +12,11 @@ async function main() {
    * is the intended trade, since grid space is the scarce resource.
    */
   const assets = [
-    { type: 'solar', basePrice: 10, multiplier: 1.15, baseW: 1 },
+    // Solar panels are flat-priced: `multiplier: 1` means every panel costs the
+    // same 10 VLT no matter how many are already owned. The pricing code in
+    // routes/assets.js treats `multiplier <= 1` as flat, so `currentPrice`
+    // always equals `basePrice` and buying N units costs exactly basePrice × N.
+    { type: 'solar', basePrice: 10, multiplier: 1, baseW: 1 },
     { type: 'panel-mount', basePrice: 15, multiplier: 1, baseW: 0 },
     { type: 'panel-mount-double', basePrice: 45, multiplier: 1, baseW: 0 },
   ];

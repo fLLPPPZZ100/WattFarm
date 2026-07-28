@@ -35,7 +35,6 @@ var CATEGORIES = [
   { key: 'promotions', label: 'Promotions', icon: '🔥' },
   { key: 'generators', label: 'Generators', icon: '⚡' },
   { key: 'supports', label: 'Supports', icon: '🔧' },
-  { key: 'grid', label: 'Grid Expansion', icon: '🔲' },
 ];
 
 var DEFAULT_COLOR = '#2A3B4D';
@@ -97,12 +96,6 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
         <p className="font-display text-sm text-text-primary tracking-wide">{item.label || item.type}</p>
         {isGenerator && powerW > 0 && (
           <p className="text-text-muted text-xs mt-0.5">+{powerW.toFixed(1)} W/s production</p>
-        )}
-        {isGenerator && (
-          <p className="text-amber-400/80 text-[11px] mt-1 flex items-center gap-1">
-            <span aria-hidden="true">↑</span>
-            <span>Price increases per unit owned</span>
-          </p>
         )}
         {!isGenerator && item.description && (
           <p className="text-text-muted text-xs mt-1 leading-tight">{item.description}</p>
@@ -179,123 +172,6 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
         </button>
       )}
     </div>
-  );
-}
-
-// ===== GRID EXPANSION SECTION =====
-function GridExpansionPanel() {
-  var { gridInfo, gridLoading, gridError, vltBalance, fetchGridInfo, expandGrid } = useAssetsStore();
-  var [expandSuccess, setExpandSuccess] = useState(false);
-
-  useEffect(function () {
-    fetchGridInfo();
-  }, [fetchGridInfo]);
-
-  var handleExpand = async function () {
-    setExpandSuccess(false);
-    try {
-      await expandGrid();
-      setExpandSuccess(true);
-    } catch (e) {
-      // Error is surfaced via gridError in the store
-    }
-  };
-
-  if (gridLoading && !gridInfo) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <p className="text-text-muted text-sm">Loading grid info...</p>
-      </div>
-    );
-  }
-
-  if (gridError && !gridInfo) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <div className="bg-red-900/20 border border-red-800 rounded-lg p-6 text-center max-w-md">
-          <p className="text-red-400 text-sm">{gridError}</p>
-          <button onClick={fetchGridInfo} className="mt-3 text-accent-watt text-xs underline hover:brightness-110">Retry</button>
-        </div>
-      </div>
-    );
-  }
-
-  var maxRows = gridInfo?.maxRows || 8;
-  var currentRows = gridInfo?.currentRows || 0;
-  var isMaxed = currentRows >= maxRows;
-  var nextCost = gridInfo?.nextExpansionCost || 0;
-  var canAfford = nextCost > 0 && nextCost <= vltBalance;
-
-  return (
-    <section>
-      <h2 className="font-display text-lg text-accent-watt tracking-wide mb-4">🔲 GRID EXPANSION</h2>
-      <div className="max-w-md">
-        <div className="rounded-xl border border-line-dusk bg-bg-abyss p-6 flex flex-col gap-4">
-          {/* Grid status */}
-          <div>
-            <p className="text-text-muted text-xs uppercase tracking-wider mb-1">Current Grid Size</p>
-            <p className="font-mono text-lg text-text-primary">{currentRows} / {maxRows} rows</p>
-          </div>
-
-          {/* Progress bar */}
-          <div className="w-full h-2 bg-bg-panel border border-line-dusk rounded-full overflow-hidden">
-            <div
-              className="h-full bg-accent-watt transition-all"
-              style={{ width: (currentRows / maxRows * 100).toFixed(0) + '%' }}
-            />
-          </div>
-
-          {isMaxed ? (
-            <div className="bg-green-900/20 border border-green-700/40 rounded-lg p-4 text-center">
-              <p className="text-green-400 font-semibold text-sm">Grid fully expanded</p>
-              <p className="text-text-muted text-xs mt-1">You have reached the maximum grid size.</p>
-            </div>
-          ) : (
-            <>
-              {/* Cost display */}
-              <div className="flex items-center justify-between">
-                <span className="text-text-muted text-sm">Next expansion cost:</span>
-                <span className={'font-mono text-sm ' + (canAfford ? 'text-accent-watt' : 'text-red-400')}>
-                  {fmtPrice(nextCost)} VLT
-                </span>
-              </div>
-
-              {/* Expand button */}
-              <button
-                onClick={handleExpand}
-                disabled={!canAfford || gridLoading}
-                className={'w-full font-semibold py-3 rounded-lg text-sm transition-all ' +
-                  (canAfford
-                    ? 'bg-accent-watt text-bg-abyss hover:brightness-110'
-                    : 'bg-[#374151] text-[#9ca3af] cursor-not-allowed')}
-              >
-                {gridLoading ? 'Expanding...' : 'Expand Grid (+1 row)'}
-              </button>
-
-              {!canAfford && nextCost > 0 && (
-                <p className="text-red-400/80 text-xs text-center">
-                  Insufficient balance. You need {fmtPrice(nextCost - vltBalance)} more VLT.
-                </p>
-              )}
-            </>
-          )}
-
-          {/* Success feedback */}
-          {expandSuccess && !isMaxed && (
-            <div className="bg-green-900/20 border border-green-700/40 rounded-lg p-3 text-center">
-              <p className="text-green-400 text-sm">Grid expanded successfully!</p>
-            </div>
-          )}
-
-          {/* Error feedback from expand attempt */}
-          {gridError && gridInfo && (
-            <div className="bg-red-900/20 border border-red-800 rounded-lg p-3 text-center">
-              <p className="text-red-400 text-xs">{gridError}</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -397,10 +273,6 @@ export default function Shop() {
             </section>
           )}
 
-          {/* GRID EXPANSION */}
-          {activeCategory === 'grid' && (
-            <GridExpansionPanel />
-          )}
         </div>
       </div>
     </div>
