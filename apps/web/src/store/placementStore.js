@@ -34,13 +34,6 @@ export const usePlacementStore = create((set) => ({
     })),
 }));
 
-/** Share of the simulated network, as a percentage. */
-export function networkSharePercent({ powerRate, networkBaseline }) {
-  const total = (powerRate || 0) + (networkBaseline || 0);
-  if (total <= 0) return 0;
-  return ((powerRate || 0) / total) * 100;
-}
-
 /** Clears per-user state on logout. */
 export function resetPlacementStore() {
   usePlacementStore.setState({ ...initialState });

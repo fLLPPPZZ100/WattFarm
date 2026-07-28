@@ -19,7 +19,7 @@
  * payout without any integration over time.
  */
 
-import { MOUNT_TYPES, PANEL_BASE_W } from '../config/mounts.js';
+import { MOUNT_TYPES, panelOutput } from '../config/mounts.js';
 
 /**
  * Instantaneous output of a set of placed mounts.
@@ -41,7 +41,11 @@ export function computePowerRate(placedMounts) {
     const panels = Array.isArray(mount.panels) ? mount.panels.slice(0, def.bays) : [];
     const filled = panels.filter(Boolean).length;
 
-    rate += filled * PANEL_BASE_W * (1 + def.powerBonus);
+    // Per-panel output comes from config/mounts.js rather than being recomputed
+    // here. This used to inline `PANEL_BASE_W * (1 + def.powerBonus)`, which is
+    // exactly what `panelOutput` already does — two copies of the rule that
+    // decides income, in a file pair that must never disagree.
+    rate += filled * panelOutput(mount.type);
   }
 
   return Math.round(rate * 10000) / 10000;

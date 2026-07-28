@@ -57,8 +57,6 @@ export const MOUNT_TYPES = Object.freeze({
   }),
 });
 
-export const MOUNT_TYPE_IDS = Object.freeze(Object.keys(MOUNT_TYPES));
-
 /** Asset type of the panels that go into bays. */
 export const PANEL_ASSET_TYPE = 'solar';
 

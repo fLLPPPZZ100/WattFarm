@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAssetsStore } from '../store/assetsStore';
 import { notify } from '../lib/notify.js';
@@ -24,8 +23,6 @@ function withAlpha(hex, a) {
 function fmtPrice(n) {
   return (n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
-
-function fmt(n) { return (n || 0).toFixed(1); }
 
 function calcTotalPrice(unitPrice, qty) {
   if (qty <= 0) return 0;
@@ -69,7 +66,6 @@ var PROMOTIONS = [
   {
     id: 'starter-pack',
     label: 'Starter Pack',
-    description: '1 Solar Panel + 50 VLT bonus',
     benefit: '1 PANEL + 50 VLT',
     price: 25,
     originalPrice: 35,
@@ -82,7 +78,6 @@ var SUPPORTS = [
   {
     id: 'panel-mount',
     label: 'Single Mount',
-    description: 'Ground mount for 1 solar panel',
     benefit: '1 PANEL SLOT',
     price: 15,
     color: '#8B7355',
@@ -91,7 +86,6 @@ var SUPPORTS = [
   {
     id: 'panel-mount-double',
     label: 'Double Mount',
-    description: 'Ground mount for 2 solar panels',
     benefit: '2 PANEL SLOTS',
     benefitNote: '+25% panel output',
     price: 25,
@@ -388,7 +382,7 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
 // ===== MAIN SHOP PAGE =====
 export default function Shop() {
   var { user } = useAuth();
-  var { catalog, assets, totalW, vltBalance, loading, fetchCatalog, fetchMining, buyAsset, clearError, error } = useAssetsStore();
+  var { catalog, assets, vltBalance, loading, fetchCatalog, fetchMining, buyAsset, clearError, error } = useAssetsStore();
   var pollingRef = useRef(null);
   var [activeCategory, setActiveCategory] = useState('promotions');
 
@@ -554,7 +548,7 @@ export default function Shop() {
                 var meta = GENERATOR_META[item.type] || {};
                 return (
                   <ShopCard key={item.type}
-                    item={{ ...item, label: meta.label, description: '+' + (meta.baseW || item.baseW || 0) + ' W/s production' }}
+                    item={{ ...item, label: meta.label }}
                     color={meta.color} img={meta.img}
                     owned={ownedMap[item.type] || 0} isGenerator vltBalance={vltBalance} onBuy={handleBuy} loading={loading} />
                 );

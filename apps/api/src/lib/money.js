@@ -67,34 +67,12 @@ export function moneyToNumber(value) {
 }
 
 /**
- * Multiplies a unit price by an integer quantity.
+ * True when `balance` covers `cost`. Explicit helper to avoid `<` on Decimals.
  *
- * @param {Prisma.Decimal | number | string} unitPrice
- * @param {number} quantity integer
- * @returns {Prisma.Decimal}
+ * Short-form comparison aliases (gte/gt/lte) are used throughout this module
+ * because they exist in both decimal.js and decimal.js-light; the verbose
+ * spellings are not guaranteed across the variants Prisma may bundle.
  */
-export function multiplyMoney(unitPrice, quantity) {
-  return roundMoney(money(unitPrice).mul(quantity));
-}
-
-/**
- * How many whole units the balance affords. Used for the "maxAffordable" hint
- * on a failed purchase.
- *
- * @param {Prisma.Decimal | number} balance
- * @param {Prisma.Decimal | number} unitPrice
- * @returns {number}
- */
-export function affordableUnits(balance, unitPrice) {
-  const price = money(unitPrice);
-  // Short-form comparison aliases (lte/gte/gt) are used throughout because they
-  // are present in both decimal.js and decimal.js-light; the verbose spellings
-  // are not guaranteed across the variants Prisma may bundle.
-  if (price.lte(0)) return 0;
-  return Math.floor(money(balance).div(price).toNumber());
-}
-
-/** True when `balance` covers `cost`. Explicit helper to avoid `<` on Decimals. */
 export function canAfford(balance, cost) {
   return money(balance).gte(money(cost));
 }

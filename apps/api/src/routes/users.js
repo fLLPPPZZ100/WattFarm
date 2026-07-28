@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import prisma from '../lib/prisma.js';
 import { verifyAuthStrict, requireVerifiedEmail } from '../middleware/verifyAuth.js';
 import { economyLimiter, configLimiter } from '../middleware/rateLimit.js';
 import { withUserLock, UserNotFoundError } from '../lib/userLock.js';
