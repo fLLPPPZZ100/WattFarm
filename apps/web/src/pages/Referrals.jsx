@@ -89,10 +89,23 @@ export default function Referrals() {
       const result = await api.get('/api/referrals/me', { signal });
       setData(result);
       setError(null);
+      setLoading(false);
     } catch (err) {
+      /**
+       * An aborted request must leave the loading flag alone.
+       *
+       * This used to clear it in a `finally`, which ran on abort too. Under
+       * StrictMode the effect mounts, unmounts and remounts, so the first
+       * request is always aborted: it cleared `loading` while `data` was still
+       * null, the render fell past both guards, and reading `data.referralCode`
+       * threw — a blank page every time the route was opened in development.
+       *
+       * The request that replaced this one owns the flag now, so returning
+       * without touching state is the correct behaviour.
+       */
       if (err?.name === 'AbortError') return;
+
       setError(err.message);
-    } finally {
       setLoading(false);
     }
   }, []);
@@ -123,6 +136,20 @@ export default function Referrals() {
             Retry
           </button>
         </div>
+      </div>
+    );
+  }
+
+  /**
+   * Everything below dereferences `data`, so this guard is what keeps an
+   * unexpected state from turning into a blank page. There is no error boundary
+   * above this route: a throw here unmounts the whole tree and the player sees
+   * white, with the cause only visible in the console.
+   */
+  if (!data) {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <p className="text-text-muted text-sm">Loading referral data</p>
       </div>
     );
   }
