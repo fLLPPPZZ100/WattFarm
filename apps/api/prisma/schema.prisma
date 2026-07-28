@@ -105,14 +105,35 @@ model MinigameSession {
   @@index([userId, game, timestamp])
 }
 
+/// How a player splits their power across the three networks.
+///
+/// ## Why a row must always exist
+///
+/// The payout cron reads this table to decide who gets paid. A player with no
+/// row here is skipped entirely — they can own panels, place them, watch the
+/// power counter rise, and never earn anything. Every account therefore gets a
+/// default allocation the moment it is created, in the same transaction.
+///
+/// ## Why the unique constraint matters
+///
+/// The payout iterates over *rows*, not over players. Two rows for the same
+/// (player, network) pair would pay that player twice, every cycle, forever.
+/// The write path used to be `deleteMany` followed by `create`, outside any
+/// lock, so two concurrent requests could interleave into exactly that state.
+/// The constraint makes it impossible rather than merely unlikely.
 model MiningAllocation {
   id         String   @id @default(uuid())
   userId     String
-  network    String   // "solar" | "wind" | "hydro"
-  percentage Float    // 0–100, user-defined split
+  network    String // "solar" | "wind" | "hydro"
+  percentage Float // 0–100, user-defined split
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, network])
+  // The payout cron queries one network at a time across all players, which the
+  // composite unique index above cannot serve.
+  @@index([network])
 }
 
 model PlayerPayout {

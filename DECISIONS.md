@@ -81,8 +81,18 @@ are.
 ## Mining payout
 - Cron runs every 10 minutes
 - Fictitious budget: 50 VLT per network (solar/wind/hydro)
-- Distributed proportionally based on: player's effective W × allocation %
-- W is calculated via the same `wCalculator.js` used for display
+- Share is `rate / (rate + NETWORK_POWER_BASELINE) x budget`, where `rate` is the
+  instantaneous output of what is **placed**, times the network's allocation
+  percentage. Computed by `services/powerCalculator.js`.
+- Only solar pays. `NETWORK_SOURCES` in `services/miningPayout.js` marks wind and
+  hydro as dormant because neither has a placeable asset yet, so their 50 VLT
+  budgets are unclaimed.
+- **Every account is created with a 100% solar allocation.** The cron reads
+  `MiningAllocation` to decide who to pay and skips players without a row, and
+  for a long time nothing created one — the only writer was the allocation slider
+  UI, which was unmounted. The result was that no player ever earned anything
+  from mining, silently. The allocation is now created in the same statement as
+  the account.
 
 ## Referrals
 - Invite links are `/login?r=CODE`. Codes are 8 characters from a 31-symbol
