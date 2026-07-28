@@ -24,6 +24,7 @@ const NAV_LINKS = [
   { to: '/minigames', label: 'Minigames', icon: '🎮' },
   { to: '/wallet', label: 'Wallet', icon: '💰' },
   { to: '/storage', label: 'Storage', icon: '📦' },
+  { to: '/referrals', label: 'Referrals', icon: '🤝' },
 ];
 
 const CURRENCIES = [

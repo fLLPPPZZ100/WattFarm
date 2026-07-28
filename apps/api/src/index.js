@@ -14,7 +14,9 @@ import farmRoutes from './routes/farm.js';
 import minigamesRoutes from './routes/minigames.js';
 import miningRoutes from './routes/mining.js';
 import usersRoutes from './routes/users.js';
+import referralsRoutes from './routes/referrals.js';
 import { startMiningPayoutCron } from './services/miningPayout.js';
+import { startReferralCommissionCron } from './services/referralCommissions.js';
 
 const app = express();
 
@@ -102,6 +104,7 @@ app.use('/api/farm', farmRoutes);
 app.use('/api/minigames', minigamesRoutes);
 app.use('/api/mining', miningRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/referrals', referralsRoutes);
 
 /* ── 404 ── */
 app.use((req, res) => {
@@ -148,6 +151,7 @@ async function start() {
   await verifyAdminCredential();
 
   startMiningPayoutCron();
+  startReferralCommissionCron();
 
   app.listen(env.PORT, () => {
     console.log(`[api] listening on http://localhost:${env.PORT}`);

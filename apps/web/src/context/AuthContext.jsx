@@ -27,6 +27,7 @@ import {
 
 import { auth, googleProvider, persistenceReady } from '../firebase.js';
 import { api, ApiError, onSessionExpired } from '../lib/apiClient.js';
+import { getStoredReferralCode, clearStoredReferralCode } from '../lib/referral.js';
 
 const AuthContext = createContext(null);
 
@@ -110,10 +111,22 @@ export function AuthProvider({ children }) {
   const provision = useCallback(
     async (firebaseUser, generation, attempt = 0) => {
       try {
-        const data = await api.post('/api/auth/sync');
+        /**
+         * The referral code rides along with the sync because that is the
+         * request which creates the database row. The server only honours it on
+         * creation, so sending it on a returning player's sync is harmless — it
+         * is simply ignored.
+         */
+        const referralCode = getStoredReferralCode();
+
+        const data = await api.post('/api/auth/sync', referralCode ? { referralCode } : {});
 
         // A newer auth event superseded this one — discard the result.
         if (generation !== syncGenerationRef.current) return;
+
+        // Discard the code once the server has ruled on it, successful or not.
+        // Retained, it would follow the tab into an unrelated registration.
+        if (referralCode) clearStoredReferralCode();
 
         setAccount(data.user ?? null);
         setProvisionError(null);

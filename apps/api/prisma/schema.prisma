@@ -20,12 +20,32 @@ model User {
   unlockedAvatars String[]           @default(["default"])
   gridRows        Int                @default(4)
   createdAt       DateTime           @default(now())
+
+  /// Public invite code. Generated server-side from a CSPRNG, never derived
+  /// from the uid or the email — a guessable code would let anyone enumerate
+  /// accounts through the signup flow. See lib/referralCode.js.
+  referralCode    String             @unique
+
+  /// Who invited this player. Written exactly once, when the row is created,
+  /// and never updated afterwards: allowing it to change later would let an
+  /// established account be claimed retroactively by whoever asked last.
+  referredById    String?
+  referredAt      DateTime?
+  referrer        User?              @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals       User[]             @relation("Referrals")
+
+  commissionsEarned    ReferralCommission[] @relation("CommissionReferrer")
+  commissionsGenerated ReferralCommission[] @relation("CommissionReferred")
+
   assets          PlayerAsset[]
   minigameLogs    MinigameSession[]
   miningAllocations MiningAllocation[]
   payouts         PlayerPayout[]
   ledger          LedgerEntry[]
   placedMounts    PlacedMount[]
+
+  // The commission run walks every referred player for a given day.
+  @@index([referredById])
 }
 
 model AssetCatalog {
@@ -106,6 +126,45 @@ model PlayerPayout {
   @@index([userId, timestamp])
 }
 
+/// One day's referral commission, for one referrer/referred/kind triple.
+///
+/// ## Why the day is part of the row, and part of the unique key
+///
+/// Commissions are settled once per UTC day for the previous day's activity,
+/// which means the job is a batch that can be retried — after a crash, a
+/// deployment in the middle of a run, or a manual re-run from
+/// `scripts/run-referral-commissions.mjs`. Without a natural key the retry
+/// would pay the same day twice.
+///
+/// `@@unique([referrerId, referredId, kind, periodDate])` makes double payment
+/// a database error rather than a silent duplicate, so the runner can insert
+/// optimistically and treat a unique violation as "already settled".
+///
+/// `sourceAmount` and `rate` are stored alongside `amount` so a commission can
+/// be audited without recomputing it from tables that may have moved on.
+model ReferralCommission {
+  id           String   @id @default(uuid())
+  referrerId   String
+  referredId   String
+  kind         String // "mining" | "purchase"
+  /// UTC day the underlying activity happened, at midnight.
+  periodDate   DateTime
+  /// Total the referred player earned (mining) or spent (purchases) that day.
+  sourceAmount Decimal  @db.Decimal(18, 4)
+  /// Commission fraction applied, recorded per row so a later rate change does
+  /// not rewrite history.
+  rate         Float
+  amount       Decimal  @db.Decimal(18, 4)
+  createdAt    DateTime @default(now())
+
+  referrer User @relation("CommissionReferrer", fields: [referrerId], references: [id])
+  referred User @relation("CommissionReferred", fields: [referredId], references: [id])
+
+  @@unique([referrerId, referredId, kind, periodDate])
+  @@index([referrerId, createdAt])
+  @@index([referredId, periodDate])
+}
+
 /// Audit trail for currency-spending actions.
 ///
 /// Purchases previously left no record, so an exploited balance could not be
@@ -114,8 +173,11 @@ model PlayerPayout {
 model LedgerEntry {
   id        String   @id @default(uuid())
   userId    String
-  kind      String // "purchase" | "avatar-unlock"
-  amount    Decimal  @db.Decimal(18, 4) // always positive; `kind` implies direction
+  kind      String // "purchase" | "avatar-unlock" | "grid-expansion" | "referral-commission"
+  // Always positive; `kind` implies direction. Everything here was a debit until
+  // "referral-commission", which is a credit — so read the sign from `kind`,
+  // never from the value.
+  amount    Decimal  @db.Decimal(18, 4)
   reference String? // asset type or avatar id
   quantity  Int      @default(1)
   balanceAfter Decimal @db.Decimal(18, 4)

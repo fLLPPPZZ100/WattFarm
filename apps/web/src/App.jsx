@@ -12,6 +12,18 @@ import Minigames from './pages/Minigames';
 import Wallet from './pages/Wallet';
 import Profile from './pages/Profile';
 import Storage from './pages/Storage';
+import Referrals from './pages/Referrals';
+
+import { captureReferralCode } from './lib/referral.js';
+
+/**
+ * An invite link arrives as `/login?r=CODE`, and the code has to be captured
+ * before anything can navigate away from that URL — the Google redirect flow
+ * leaves the site entirely and returns to a clean address. Running this at
+ * module scope means it happens once, before the router mounts, rather than in an
+ * effect that a redirect could pre-empt.
+ */
+captureReferralCode();
 
 export default function App() {
   /**
@@ -39,6 +51,7 @@ export default function App() {
               <Route path="wallet" element={<Wallet />} />
               <Route path="profile" element={<Profile />} />
               <Route path="storage" element={<Storage />} />
+              <Route path="referrals" element={<Referrals />} />
             </Route>
           </Route>
 
