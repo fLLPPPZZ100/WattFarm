@@ -135,7 +135,7 @@ export const minigameLimiter = makeLimiter({
   message: 'Too many minigame attempts. Please wait a moment.',
 });
 
-/** Writes to mining allocation config — replaces all rows in a transaction. */
+/** Configuration writes that replace rows wholesale: farm layout, avatar. */
 export const configLimiter = makeLimiter({
   windowMs: 60 * 1000,
   limit: 20,

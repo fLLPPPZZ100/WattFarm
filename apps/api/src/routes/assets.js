@@ -3,7 +3,7 @@ import prisma from '../lib/prisma.js';
 import { verifyAuth, verifyAuthStrict, requireVerifiedEmail } from '../middleware/verifyAuth.js';
 import { economyLimiter } from '../middleware/rateLimit.js';
 import { withUserLock, UserNotFoundError } from '../lib/userLock.js';
-import { money, moneyToNumber, canAfford, Prisma } from '../lib/money.js';
+import { money, moneyToNumber, roundMoney, affordableUnits, canAfford } from '../lib/money.js';
 import { computePowerRate } from '../services/powerCalculator.js';
 import env from '../config/env.js';
 
@@ -23,92 +23,13 @@ const PURCHASABLE_TYPES = ['solar', 'panel-mount', 'panel-mount-double'];
 const MAX_PURCHASE_QUANTITY = 99;
 
 /**
- * Computes the total cost of buying `qty` units of an asset with exponential
- * pricing.
+ * GET /api/assets/catalog — every purchasable asset with its price.
  *
- * Formula (geometric series):
- *   totalPrice = basePrice × multiplier^owned × (multiplier^qty - 1) / (multiplier - 1)
- *
- * When multiplier === 1 the price is flat: basePrice × qty.
- *
- * @param {Prisma.Decimal | number | string} basePrice
- * @param {number} multiplier
- * @param {number} owned  — quantity the player already owns
- * @param {number} qty    — how many units are being purchased
- * @returns {Prisma.Decimal}
+ * Prices are **fixed**: an asset costs the same whether it is your first or your
+ * fiftieth, so `price × quantity` is the whole cost model. There is no
+ * per-player component, which is why this response is identical for everyone
+ * apart from `quantityOwned`.
  */
-function computeExponentialTotal(basePrice, multiplier, owned, qty) {
-  const base = money(basePrice);
-  if (multiplier <= 1) {
-    return base.mul(qty);
-  }
-  const m = new Prisma.Decimal(multiplier);
-  // multiplier^owned
-  const mPowOwned = m.pow(owned);
-  // multiplier^qty
-  const mPowQty = m.pow(qty);
-  // geometric sum: base × m^owned × (m^qty - 1) / (m - 1)
-  const numerator = mPowQty.minus(1);
-  const denominator = m.minus(1);
-  return base.mul(mPowOwned).mul(numerator.div(denominator));
-}
-
-/**
- * Calculates how many whole units a player can afford given exponential pricing.
- *
- * Iteratively adds the cost of each successive unit until the remaining balance
- * is exhausted. For flat pricing (multiplier <= 1) falls back to simple
- * division.
- *
- * @param {Prisma.Decimal | number} balance
- * @param {Prisma.Decimal | number | string} basePrice
- * @param {number} multiplier
- * @param {number} owned
- * @returns {number}
- */
-function affordableUnitsExponential(balance, basePrice, multiplier, owned) {
-  const bal = money(balance);
-  const base = money(basePrice);
-
-  if (base.lte(0)) return 0;
-
-  // Flat pricing shortcut
-  if (multiplier <= 1) {
-    return Math.floor(bal.div(base).toNumber());
-  }
-
-  const m = new Prisma.Decimal(multiplier);
-  let remaining = bal;
-  let count = 0;
-
-  // Cap the loop at MAX_PURCHASE_QUANTITY to prevent runaway iteration.
-  while (count < MAX_PURCHASE_QUANTITY) {
-    const nextUnitCost = base.mul(m.pow(owned + count));
-    if (remaining.lt(nextUnitCost)) break;
-    remaining = remaining.minus(nextUnitCost);
-    count++;
-  }
-
-  return count;
-}
-
-/**
- * Computes the price of the next single unit (the one right after the player's
- * current inventory).
- *
- * @param {Prisma.Decimal | number | string} basePrice
- * @param {number} multiplier
- * @param {number} owned
- * @returns {Prisma.Decimal}
- */
-function computeNextPrice(basePrice, multiplier, owned) {
-  const base = money(basePrice);
-  if (multiplier <= 1) return base;
-  const m = new Prisma.Decimal(multiplier);
-  return base.mul(m.pow(owned));
-}
-
-// GET /api/assets/catalog — list all assets with current price
 router.get('/catalog', verifyAuth, async (req, res) => {
   try {
     const catalog = await prisma.assetCatalog.findMany();
@@ -122,19 +43,14 @@ router.get('/catalog', verifyAuth, async (req, res) => {
       quantityMap[pa.type] = pa.quantity;
     }
 
-    // Prices are Decimal in the database; emit numbers so the frontend
-    // contract is unchanged.
-    const result = catalog.map((item) => {
-      const owned = quantityMap[item.type] || 0;
-      return {
-        type: item.type,
-        basePrice: moneyToNumber(item.basePrice),
-        multiplier: item.multiplier,
-        baseW: item.baseW,
-        currentPrice: moneyToNumber(computeNextPrice(item.basePrice, item.multiplier, owned)),
-        quantityOwned: owned,
-      };
-    });
+    // Prices are Decimal in the database; emit numbers so the frontend gets
+    // plain JSON values.
+    const result = catalog.map((item) => ({
+      type: item.type,
+      price: moneyToNumber(item.price),
+      baseW: item.baseW,
+      quantityOwned: quantityMap[item.type] || 0,
+    }));
 
     res.json({ catalog: result });
   } catch (err) {
@@ -187,20 +103,14 @@ router.post(
       }
 
       const result = await withUserLock(req.uid, async (tx, user) => {
-        // Read the player's current quantity for this asset type (needed for
-        // exponential pricing).
         const existing = await tx.playerAsset.findFirst({
           where: { userId: req.uid, type },
         });
-        const owned = existing ? existing.quantity : 0;
 
-        // Compute the total cost using exponential or flat pricing.
-        const totalPrice = computeExponentialTotal(
-          catalogEntry.basePrice,
-          catalogEntry.multiplier,
-          owned,
-          qty
-        );
+        // Fixed pricing: quantity times the catalogue price, and nothing else.
+        // Done with Decimal rather than a plain multiply so a fractional price
+        // cannot drift — see lib/money.js.
+        const totalPrice = roundMoney(money(catalogEntry.price).mul(qty));
 
         // `user` was read under FOR UPDATE, so this balance cannot change
         // until the transaction commits.
@@ -209,7 +119,6 @@ router.post(
             insufficient: true,
             balance: money(user.vltBalance),
             totalPrice,
-            owned,
           };
         }
 
@@ -250,7 +159,6 @@ router.post(
           user: updatedUser,
           asset: updatedAsset,
           totalPrice,
-          owned,
         };
       });
 
@@ -259,16 +167,14 @@ router.post(
           error: 'Insufficient VLT balance',
           required: moneyToNumber(result.totalPrice),
           balance: moneyToNumber(result.balance),
-          maxAffordable: affordableUnitsExponential(
-            result.balance,
-            catalogEntry.basePrice,
-            catalogEntry.multiplier,
-            result.owned
+          // With a fixed price this is plain division. Capped at the per-request
+          // limit so the hint never suggests a quantity the route would reject.
+          maxAffordable: Math.min(
+            MAX_PURCHASE_QUANTITY,
+            affordableUnits(result.balance, catalogEntry.price)
           ),
         });
       }
-
-      const newOwned = result.owned + qty;
 
       return res.json({
         success: true,
@@ -276,9 +182,6 @@ router.post(
         totalPrice: moneyToNumber(result.totalPrice),
         newBalance: moneyToNumber(result.user.vltBalance),
         newQuantity: result.asset.quantity,
-        nextPrice: moneyToNumber(
-          computeNextPrice(catalogEntry.basePrice, catalogEntry.multiplier, newOwned)
-        ),
       });
     } catch (err) {
       if (err instanceof UserNotFoundError) {

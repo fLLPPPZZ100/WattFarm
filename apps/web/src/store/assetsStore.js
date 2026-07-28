@@ -54,7 +54,8 @@ export const useAssetsStore = create((set, get) => ({
     set({ loading: true, error: null });
     try {
       const data = await api.post('/api/assets/buy', { type, quantity: quantity || 1 });
-      // Re-fetch catalog to get updated currentPrice (exponential pricing)
+      // Prices are fixed, so the catalogue itself cannot change — but
+      // `quantityOwned` did, and the balance with it.
       await Promise.all([get().fetchCatalog(), get().fetchMining()]);
       set({ loading: false });
       return data;

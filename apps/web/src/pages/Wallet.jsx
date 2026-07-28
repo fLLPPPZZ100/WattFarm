@@ -72,10 +72,9 @@ export default function Wallet() {
 
         {payouts.length === 0 ? (
           /*
-            No longer tells the player to "configure your mining allocations":
-            that screen is unmounted, so it was an instruction nobody could
-            follow. Every account now starts allocated to solar, so the only
-            thing actually required is a panel installed on a mount.
+            The only requirement is a panel installed on a mount. This used to
+            tell the player to "configure your mining allocations", an
+            instruction nobody could follow even before allocations were removed.
           */
           <p className="text-text-muted text-sm">
             No mining payouts yet. Install a panel on a mount in your farm and wait for the next
@@ -89,10 +88,18 @@ export default function Wallet() {
                 className="flex items-center justify-between py-2 border-b border-line-dusk last:border-0"
               >
                 <div>
-                  <p className="text-text-muted text-xs capitalize">
-                    {p.details.network} · {p.details.percentage}% allocation
+                  {/*
+                    Power rate rather than the old "network · percentage" line:
+                    there is one network now, and no allocation to show. Payouts
+                    recorded before that change still carry those fields, so this
+                    reads what every row has.
+                  */}
+                  <p className="text-body-sm text-text-muted">
+                    {typeof p.details.powerRate === 'number'
+                      ? `${p.details.powerRate} W/s mined`
+                      : 'Mining payout'}
                   </p>
-                  <p className="text-text-muted text-xs mt-0.5">
+                  <p className="text-body-sm text-text-muted mt-0.5">
                     {new Date(p.timestamp).toLocaleString()}
                   </p>
                 </div>

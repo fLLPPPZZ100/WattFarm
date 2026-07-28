@@ -5,12 +5,12 @@ import AccountPanel from '../components/profile/AccountPanel.jsx';
 /**
  * Profile page.
  *
- * The mining allocation sliders used to live here. They moved to
- * `components/profile/MiningAllocationPanel.jsx` and are deliberately not
- * mounted — see that file for why, and for how to bring them back. Nothing was
- * deleted and the API routes are untouched.
+ * This page used to carry mining allocation sliders, which split the farm's
+ * power across solar, wind and hydro. Wind and hydro never existed as placeable
+ * assets, so the whole concept is gone — panel, routes and table. Every watt on
+ * the field now counts towards the one budget.
  *
- * With the allocation fetch gone this page has no async work of its own, so the
+ * With no allocation fetch this page has no async work of its own, so the
  * loading gate went with it: `AccountPanel` and `AvatarPicker` both read
  * already-resolved state from `useAuth`, and `RequireAuth` guarantees a
  * provisioned session before the page mounts.

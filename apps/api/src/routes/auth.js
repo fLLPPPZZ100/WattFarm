@@ -63,28 +63,6 @@ async function resolveReferrer(rawCode, newUserId) {
  */
 const STARTING_VLT = 50;
 
-/**
- * Network a new account mines by default.
- *
- * ## Why this exists
- *
- * The payout cron reads `MiningAllocation` to decide who to pay, and skips any
- * player without a row. Nothing created that row: the only code that ever wrote
- * one was the allocation slider UI, and that was unmounted (see
- * `components/profile/MiningAllocationPanel.jsx`). The data dependency was
- * archived along with the screen, and nobody noticed because the symptom is
- * silence — a new player buys a mount and a panel, places them, watches the
- * power counter rise, and simply never earns anything.
- *
- * Creating the allocation with the account closes that gap at the only moment
- * where it can be done exactly once.
- *
- * Solar because it is the only network with a placeable asset. `NETWORK_SOURCES`
- * in services/miningPayout.js marks wind and hydro as dormant, so any other
- * default would pay nothing.
- */
-const DEFAULT_MINING_NETWORK = 'solar';
-
 function serialiseUser(user) {
   return {
     id: user.id,
@@ -158,12 +136,6 @@ router.post('/sync', verifyAuth, authSyncLimiter, async (req, res) => {
             vltBalance: STARTING_VLT,
             referralCode: generateReferralCode(),
             ...(referredById ? { referredById, referredAt: new Date() } : {}),
-            // Nested create, so the account and its allocation land in one
-            // statement. A separate insert afterwards could fail on its own and
-            // leave an account that can never earn.
-            miningAllocations: {
-              create: { network: DEFAULT_MINING_NETWORK, percentage: 100 },
-            },
           },
         });
         break;

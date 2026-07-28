@@ -38,7 +38,6 @@ model User {
 
   assets          PlayerAsset[]
   minigameLogs    MinigameSession[]
-  miningAllocations MiningAllocation[]
   payouts         PlayerPayout[]
   ledger          LedgerEntry[]
   placedMounts    PlacedMount[]
@@ -47,11 +46,17 @@ model User {
   @@index([referredById])
 }
 
+/// Purchasable assets and their prices.
+///
+/// Prices are fixed. There used to be a `multiplier` column driving exponential
+/// pricing (cost rising with the quantity already owned); it was always 1, so
+/// the escalation never took effect, and it has been removed along with the
+/// geometric-series arithmetic that read it. An asset costs the same on the
+/// first purchase as on the fiftieth.
 model AssetCatalog {
-  type       String  @id // "solar" | "wind" | "hydro"
-  basePrice  Decimal @db.Decimal(18, 4) // currency — exact
-  multiplier Float // ratio, not currency
-  baseW      Float // watts per second, a physical rate
+  type  String  @id // "solar" | "panel-mount" | "panel-mount-double"
+  price Decimal @db.Decimal(18, 4) // currency — exact
+  baseW Float // watts per second, a physical rate
 }
 
 model PlayerAsset {
@@ -104,42 +109,14 @@ model MinigameSession {
   @@index([userId, game, timestamp])
 }
 
-/// How a player splits their power across the three networks.
-///
-/// ## Why a row must always exist
-///
-/// The payout cron reads this table to decide who gets paid. A player with no
-/// row here is skipped entirely — they can own panels, place them, watch the
-/// power counter rise, and never earn anything. Every account therefore gets a
-/// default allocation the moment it is created, in the same transaction.
-///
-/// ## Why the unique constraint matters
-///
-/// The payout iterates over *rows*, not over players. Two rows for the same
-/// (player, network) pair would pay that player twice, every cycle, forever.
-/// The write path used to be `deleteMany` followed by `create`, outside any
-/// lock, so two concurrent requests could interleave into exactly that state.
-/// The constraint makes it impossible rather than merely unlikely.
-model MiningAllocation {
-  id         String   @id @default(uuid())
-  userId     String
-  network    String // "solar" | "wind" | "hydro"
-  percentage Float // 0–100, user-defined split
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  user       User     @relation(fields: [userId], references: [id])
-
-  @@unique([userId, network])
-  // The payout cron queries one network at a time across all players, which the
-  // composite unique index above cannot serve.
-  @@index([network])
-}
-
 model PlayerPayout {
   id         String   @id @default(uuid())
   userId     String
   amount     Decimal  @db.Decimal(18, 4)
-  details    String   // JSON string with breakdown per network
+  // JSON string with the breakdown: power rate, baseline, budget, payout.
+  // Rows written before the multi-network model was removed also carry
+  // `network` and `percentage`.
+  details    String
   timestamp  DateTime @default(now())
   user       User     @relation(fields: [userId], references: [id])
 

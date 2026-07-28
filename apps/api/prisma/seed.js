@@ -11,14 +11,11 @@ async function main() {
    * exist. At 45 it costs 22.50 per bay: worse per watt, better per cell. That
    * is the intended trade, since grid space is the scarce resource.
    */
+  // Fixed prices: buying N units costs exactly price × N, always.
   const assets = [
-    // Solar panels are flat-priced: `multiplier: 1` means every panel costs the
-    // same 10 VLT no matter how many are already owned. The pricing code in
-    // routes/assets.js treats `multiplier <= 1` as flat, so `currentPrice`
-    // always equals `basePrice` and buying N units costs exactly basePrice × N.
-    { type: 'solar', basePrice: 10, multiplier: 1, baseW: 1 },
-    { type: 'panel-mount', basePrice: 15, multiplier: 1, baseW: 0 },
-    { type: 'panel-mount-double', basePrice: 45, multiplier: 1, baseW: 0 },
+    { type: 'solar', price: 10, baseW: 1 },
+    { type: 'panel-mount', price: 15, baseW: 0 },
+    { type: 'panel-mount-double', price: 45, baseW: 0 },
   ];
 
   for (const asset of assets) {
@@ -26,7 +23,7 @@ async function main() {
       where: { type: asset.type },
       // Prices are re-applied on every seed run; `update: {}` meant a rebalance
       // never reached an existing database.
-      update: { basePrice: asset.basePrice, multiplier: asset.multiplier, baseW: asset.baseW },
+      update: { price: asset.price, baseW: asset.baseW },
       create: asset,
     });
   }

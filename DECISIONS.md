@@ -25,26 +25,36 @@ URL they happened to open.
 the component (`pages/Farm.jsx`) renders nothing, because the Phaser canvas is
 mounted once by `AppShell` in `#phaser-root` and kept alive across navigation.
 
-The mining allocation sliders were removed from `/profile`. The component is
-preserved, unmounted, in `components/profile/MiningAllocationPanel.jsx`; the API
-routes are untouched. See that file for why it is parked and what the options
-are.
+The mining allocation sliders that used to sit on `/profile` are gone — panel,
+routes and table. They split power across solar, wind and hydro; see § Asset
+types for why those networks no longer exist.
 
 ## Game IDs (minigames)
 - `solar-swipe` — Solar Swipe
 - `wind-clicker` — Wind Clicker
 - `hydro-race` — Hydro Race
 
+These two names still reference wind and hydro, which no longer exist as power
+types. They are kept for now because the id is the database key in
+`MinigameSession` and because the minigames have no gameplay yet — the three are
+labels on one shared loot roll. Rename them when the games are actually built,
+with a migration for the stored rows.
+
 ## Asset types (matching AssetCatalog)
 What `prisma/seed.js` actually writes:
 
-- `solar` — Solar Panel (10 VLT base, **1× multiplier**, 1 W/s)
-- `panel-mount` — Single Mount (15 VLT base, 1× multiplier, 0 W/s, 1 bay)
-- `panel-mount-double` — Double Mount (45 VLT base, 1× multiplier, 0 W/s, 2 bays, +25% per panel)
+- `solar` — Solar Panel (10 VLT, 1 W/s)
+- `panel-mount` — Single Mount (15 VLT, 1 bay)
+- `panel-mount-double` — Double Mount (45 VLT, 2 bays, +25% per panel)
 
-`wind` and `hydro` are **not** in the catalogue. They exist only as network
-budget lines in `services/miningPayout.js`, marked dormant because neither has a
-placeable asset yet.
+Solar is the only kind of power in the game. Wind and hydro were removed: they
+had network budgets, allocation percentages and minigame names but never a
+placeable asset, so two thirds of the payout budget was never distributed and the
+allocation split had exactly one useful setting.
+
+The double mount is priced above two singles on purpose. At 22.50 per bay it is
+worse per watt than the single's 15.00 but better per *cell* (1.25 W/s against
+1.0), and grid space is the scarce resource — that is the trade.
 
 Prices are the single source of truth for the whole client: the Shop reads unit
 prices from `/api/assets/catalog` for everything the buy endpoint sells, and
@@ -53,14 +63,17 @@ hardcoded in two pages, which is how the double mount came to be advertised at 2
 while the server charged 45.
 
 ## Price formula
-`currentPrice = basePrice × multiplier ^ quantityAlreadyBought`
-(calculated server-side on every request, never stored)
+`totalPrice = price × quantity`
 
-The geometric machinery is implemented in `routes/assets.js`, including the
-series total for a multi-unit purchase. It is currently **inert**: every seeded
-`multiplier` is 1, and `multiplier <= 1` takes the flat path, so `currentPrice`
-always equals `basePrice`. Turning progression back on is a seed change, not a
-code change.
+Prices are **fixed**. An asset costs the same on the first purchase as on the
+fiftieth, and the only per-player input to a purchase is whether the balance
+covers it.
+
+There used to be exponential pricing — a `multiplier` column and a geometric
+series in `routes/assets.js` — where cost rose with the quantity already owned.
+Every seeded multiplier was 1, so it never took effect, and it is gone: column,
+arithmetic and the `currentPrice`/`nextPrice` fields it produced. `GET /catalog`
+emits a single `price` per asset.
 
 ## Power calculation
 `powerRate = Σ (panels installed on a mount × PANEL_BASE_W × (1 + mount bonus))`
@@ -78,10 +91,15 @@ docblock in `powerCalculator.js` for the full account.
 ## Payout
 `share = rate / (rate + NETWORK_POWER_BASELINE) × budget`
 
-Cron every 10 minutes. The synthetic baseline (40 W/s by default) stands in for
-network difficulty, which is what makes the first panel meaningful and gives
-diminishing returns as the farm grows. Solar's budget is 50 VLT per cycle; the
-wind and hydro budgets are not paid out while those networks are dormant.
+Cron every 10 minutes, 50 VLT per cycle shared between everyone mining. The
+synthetic baseline (40 W/s by default) stands in for network difficulty, which is
+what makes the first panel meaningful and gives diminishing returns as the farm
+grows.
+
+The cron walks players who have placed mounts. It used to walk `MiningAllocation`
+rows instead, which meant a player without a row earned nothing at all — panels
+placed, counter rising, silence — and exactly one code path created that row.
+Removing the multi-network split removed that failure mode with it.
 
 ## Grid
 A fixed 14 × 4, defined once in `config/mounts.js` and validated on every layout
@@ -140,19 +158,12 @@ and the three names are labels on the same roll.
 
 ## Mining payout
 - Cron runs every 10 minutes
-- Fictitious budget: 50 VLT per network (solar/wind/hydro)
+- Fictitious budget: 50 VLT per cycle, shared
 - Share is `rate / (rate + NETWORK_POWER_BASELINE) x budget`, where `rate` is the
-  instantaneous output of what is **placed**, times the network's allocation
-  percentage. Computed by `services/powerCalculator.js`.
-- Only solar pays. `NETWORK_SOURCES` in `services/miningPayout.js` marks wind and
-  hydro as dormant because neither has a placeable asset yet, so their 50 VLT
-  budgets are unclaimed.
-- **Every account is created with a 100% solar allocation.** The cron reads
-  `MiningAllocation` to decide who to pay and skips players without a row, and
-  for a long time nothing created one — the only writer was the allocation slider
-  UI, which was unmounted. The result was that no player ever earned anything
-  from mining, silently. The allocation is now created in the same statement as
-  the account.
+  instantaneous output of what is **placed**. Computed by
+  `services/powerCalculator.js`.
+- Eligibility is simply "has a panel installed on a mount". Owning a panel earns
+  nothing; there is no other precondition and no configuration to get wrong.
 
 ## Referrals
 - Invite links are `/login?r=CODE`. Codes are 8 characters from a 31-symbol

@@ -68,9 +68,9 @@ async function describeSetup() {
     );
   }
 
-  // Mining commissions depend on the payout cron having produced rows. It
-  // currently pays nobody without a MiningAllocation, so say so rather than
-  // letting a zero total look like a bug in settlement.
+  // Mining commissions depend on the payout cron having produced rows, which
+  // needs at least one player with a panel installed on a mount. Say so rather
+  // than letting a zero total look like a bug in settlement.
   const payoutCount = await prisma.playerPayout.count();
   if (payoutCount === 0 && env.REFERRAL_MINING_RATE > 0) {
     console.log(

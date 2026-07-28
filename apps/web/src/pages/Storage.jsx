@@ -51,7 +51,7 @@ export default function Storage() {
   /** Base unit price per asset type, from the server catalogue. */
   var priceMap = {};
   for (var c = 0; c < catalog.length; c++) {
-    priceMap[catalog[c].type] = catalog[c].basePrice;
+    priceMap[catalog[c].type] = catalog[c].price;
   }
 
   // Build owned map from API data (type -> quantity)

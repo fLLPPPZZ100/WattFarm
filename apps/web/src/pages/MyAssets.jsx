@@ -240,10 +240,11 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
   }
 
   if (showPurchaseSystem) {
-    // Authoritative price from the server catalogue (exponential pricing).
-    // Applies to generators and supports alike — anything the buy endpoint
-    // actually sells is priced by the endpoint, never by this file.
-    unitPrice = item.currentPrice || item.basePrice || 0;
+    // Authoritative price from the server catalogue. Applies to generators and
+    // supports alike — anything the buy endpoint actually sells is priced by the
+    // endpoint, never by this file. Prices are fixed, so quantity is a plain
+    // multiplier.
+    unitPrice = item.price || 0;
   } else {
     // Promotions are static placeholders with no catalogue row yet.
     unitPrice = item.price || 0;

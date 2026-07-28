@@ -221,7 +221,7 @@ async function probePurchases(token) {
     return;
   }
 
-  const unitPrice = entry.basePrice;
+  const unitPrice = entry.price;
   const before = await getState(token);
 
   info(`unit price: ${unitPrice} VLT`);

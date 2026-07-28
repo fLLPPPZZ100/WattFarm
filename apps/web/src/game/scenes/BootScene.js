@@ -24,32 +24,11 @@ export default class BootScene extends Phaser.Scene {
   }
 
   create() {
-    // Generate placeholder textures in create() (texture manager is fully ready)
-    this.createPlaceholderTexture('wind_turbine', '#5FD4C4');
-    this.createPlaceholderTexture('hydro_plant', '#4DA8DA');
-    this.createPlaceholderTexture('battery', '#888888');
+    /**
+     * This used to generate placeholder canvas textures for `wind_turbine`,
+     * `hydro_plant` and `battery`. No scene ever drew any of them: wind and hydro
+     * do not exist, and batteries were never built. The generator went with them.
+     */
     this.scene.start('FarmScene');
-  }
-
-  /**
-   * Generates a 32x32 placeholder texture using the texture manager.
-   */
-  createPlaceholderTexture(key, hexColor) {
-    if (this.textures.exists(key)) return;
-
-    var canvas = this.textures.createCanvas(key, 32, 32);
-    var ctx = canvas.getContext();
-    var color = Phaser.Display.Color.HexStringToColor(hexColor);
-
-    // Fill
-    ctx.fillStyle = 'rgba(' + color.red + ',' + color.green + ',' + color.blue + ',0.3)';
-    ctx.fillRect(0, 0, 32, 32);
-
-    // Border
-    ctx.strokeStyle = 'rgba(' + color.red + ',' + color.green + ',' + color.blue + ',0.8)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(0, 0, 32, 32);
-
-    canvas.refresh();
   }
 }

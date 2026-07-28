@@ -67,6 +67,20 @@ export function moneyToNumber(value) {
 }
 
 /**
+ * How many whole units a balance affords at a fixed unit price. Used for the
+ * `maxAffordable` hint on a refused purchase.
+ *
+ * @param {Prisma.Decimal | number} balance
+ * @param {Prisma.Decimal | number} unitPrice
+ * @returns {number}
+ */
+export function affordableUnits(balance, unitPrice) {
+  const price = money(unitPrice);
+  if (price.lte(0)) return 0;
+  return Math.floor(money(balance).div(price).toNumber());
+}
+
+/**
  * True when `balance` covers `cost`. Explicit helper to avoid `<` on Decimals.
  *
  * Short-form comparison aliases (gte/gt/lte) are used throughout this module

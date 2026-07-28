@@ -35,79 +35,64 @@ const c = {
 };
 
 /**
- * Explains, per network, whether anyone is eligible.
+ * Explains whether anyone is eligible to be paid.
  *
- * A payout produces nothing unless a player has BOTH an allocation for the
- * network AND panels actually installed on mounts. Owning panels is no longer
- * enough — that is the whole point of the placement change — and without this
- * report a cycle that pays nothing just looks broken.
+ * A payout produces nothing unless a player has panels actually installed on
+ * mounts. Owning panels is not enough — that is the whole point of the placement
+ * model — and without this report a cycle that pays nothing just looks broken.
  */
 async function describeEligibility() {
   console.log(`\n${c.bold}${c.cyan}Eligibility${c.reset}`);
   console.log(`  ${c.dim}network baseline: ${env.NETWORK_POWER_BASELINE} W/s${c.reset}`);
 
-  for (const network of ['solar', 'wind', 'hydro']) {
-    const allocations = await prisma.miningAllocation.findMany({ where: { network } });
+  const placed = await prisma.placedMount.findMany({
+    select: { userId: true, type: true, panels: true },
+  });
 
-    if (allocations.length === 0) {
-      console.log(
-        `  ${c.yellow}${network}${c.reset}: no allocations — ` +
-          (network === 'solar'
-            ? `every account should have one by default; run the ` +
-              `20260728140000_default_mining_allocation migration if this is unexpected`
-            : `nothing is allocated here, which is normal while ${network} has no placeable asset`)
-      );
-      continue;
-    }
+  if (placed.length === 0) {
+    console.log(`  ${c.yellow}nobody has placed a mount yet — nothing to pay${c.reset}`);
+    return;
+  }
 
-    if (network !== 'solar') {
-      console.log(
-        `  ${c.yellow}${network}${c.reset}: ${allocations.length} allocation(s), but no ` +
-          `placeable ${network} asset exists yet — pays nothing`
-      );
-      continue;
-    }
+  const byUser = new Map();
+  for (const mount of placed) {
+    const mounts = byUser.get(mount.userId);
+    if (mounts) mounts.push(mount);
+    else byUser.set(mount.userId, [mount]);
+  }
 
-    let eligible = 0;
+  let eligible = 0;
 
-    for (const allocation of allocations) {
-      const placed = await prisma.placedMount.findMany({ where: { userId: allocation.userId } });
-      const rate = computePowerRate(placed);
+  for (const [userId, mounts] of byUser) {
+    const rate = computePowerRate(mounts);
 
-      if (rate <= 0) {
-        if (explain) {
-          const owned = await prisma.playerAsset.findMany({ where: { userId: allocation.userId } });
-          const panels = owned.find((a) => a.type === 'solar')?.quantity ?? 0;
-          console.log(
-            `  ${c.dim}${network}: user ${allocation.userId.slice(0, 8)}… ` +
-              `${placed.length} mount(s) placed, 0 W/s` +
-              (panels > 0 ? ` — owns ${panels} panel(s) but none installed on a mount` : '') +
-              `${c.reset}`
-          );
-        }
-        continue;
-      }
-
-      eligible += 1;
-
+    if (rate <= 0) {
       if (explain) {
-        const effective = rate * (allocation.percentage / 100);
-        const share = computeShare(effective, env.NETWORK_POWER_BASELINE, 50);
-        const pct = (effective / (effective + env.NETWORK_POWER_BASELINE)) * 100;
+        const owned = await prisma.playerAsset.findMany({ where: { userId } });
+        const panels = owned.find((a) => a.type === 'solar')?.quantity ?? 0;
         console.log(
-          `  ${c.dim}${network}: user ${allocation.userId.slice(0, 8)}… ` +
-            `${rate} W/s placed, ${allocation.percentage}% allocated → ` +
-            `${effective.toFixed(2)} W/s = ${pct.toFixed(1)}% of the network → ` +
-            `${share.toFixed(2)} VLT${c.reset}`
+          `  ${c.dim}user ${userId.slice(0, 8)}… ${mounts.length} mount(s) placed, 0 W/s` +
+            (panels > 0 ? ` — owns ${panels} panel(s) but none installed on a mount` : '') +
+            `${c.reset}`
         );
       }
+      continue;
     }
 
-    const colour = eligible > 0 ? c.green : c.yellow;
-    console.log(
-      `  ${colour}${network}${c.reset}: ${allocations.length} allocation(s), ${eligible} eligible`
-    );
+    eligible += 1;
+
+    if (explain) {
+      const share = computeShare(rate, env.NETWORK_POWER_BASELINE, 50);
+      const pct = (rate / (rate + env.NETWORK_POWER_BASELINE)) * 100;
+      console.log(
+        `  ${c.dim}user ${userId.slice(0, 8)}… ${rate} W/s placed = ` +
+          `${pct.toFixed(1)}% of the network → ${share.toFixed(2)} VLT${c.reset}`
+      );
+    }
   }
+
+  const colour = eligible > 0 ? c.green : c.yellow;
+  console.log(`  ${colour}${byUser.size} player(s) with mounts, ${eligible} eligible${c.reset}`);
 }
 
 async function main() {
