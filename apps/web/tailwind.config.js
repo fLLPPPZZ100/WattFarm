@@ -19,10 +19,23 @@ export default {
         'accent-watt-dim': '#8A6A2B',
         'danger-crt': '#FF5C5C',
       },
+      /**
+       * Every family is a pixel typeface — the interface is 2D throughout, so a
+       * smooth humanist sans in the middle of it read as a different product.
+       *
+       * display — Silkscreen. Chunky bitmap caps for titles and buttons.
+       * body    — Pixelify Sans. The only pixel face here that stays legible in
+       *           a paragraph, and it has a real weight axis (400..700), which
+       *           Silkscreen and VT323 do not.
+       * mono    — VT323. Genuinely monospaced, which is the whole reason this
+       *           slot exists: live counters must not jump as digits change
+       *           width. A proportional pixel font would reintroduce that
+       *           shift.
+       */
       fontFamily: {
-        display: ['Silkscreen', 'cursive'],
-        body: ['Inter', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        display: ['Silkscreen', 'monospace'],
+        body: ['"Pixelify Sans"', 'sans-serif'],
+        mono: ['VT323', 'monospace'],
       },
       boxShadow: {
         // Hard-edged shadows only — no blur, so everything stays crisp at

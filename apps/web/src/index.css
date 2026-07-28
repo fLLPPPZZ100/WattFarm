@@ -4,7 +4,7 @@
 
 @layer base {
   body {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Pixelify Sans', sans-serif;
   }
 
   img {
@@ -13,7 +13,14 @@
   }
 
   /* Silkscreen only ships a small set of glyphs and looks muddy when the
-     browser hints it. Turning hinting off keeps the pixel grid intact. */
+     browser hints it. Turning hinting off keeps the pixel grid intact.
+     
+     Deliberately not applied to .font-body or .font-mono. Pixelify Sans and
+     VT323 are outline fonts drawn to look pixelated, not true bitmaps: with
+     smoothing off they go ragged at any size that is not a whole multiple of
+     their internal grid, and body copy is exactly where that is least
+     forgivable. Silkscreen is only ever used for short uppercase runs, where
+     the hard edges are the point. */
   .font-display {
     -webkit-font-smoothing: none;
     -moz-osx-font-smoothing: unset;
