@@ -2,6 +2,13 @@ import { useState } from 'react';
 import avatars, { getAvatarPrice, isAvatarAvailable } from '../../data/avatars';
 import { api } from '../../lib/apiClient.js';
 import { friendlyAuthError } from '../../lib/authErrors.js';
+import { notify } from '../../lib/notify.js';
+
+/** Display name for an avatar id, for use in notification copy. */
+function avatarLabel(avatarId) {
+  const match = avatars.find((avatar) => avatar.id === avatarId);
+  return match ? match.label : 'Avatar';
+}
 
 /**
  * Grid of selectable avatars.
@@ -18,26 +25,24 @@ import { friendlyAuthError } from '../../lib/authErrors.js';
  */
 export default function AvatarPicker({ unlockedAvatars = [], activeAvatarId, onAvatarChanged }) {
   const [loading, setLoading] = useState(null); // id being processed
-  const [error, setError] = useState('');
 
   const handleSelect = async (avatarId) => {
     if (avatarId === activeAvatarId) return;
 
-    setError('');
     setLoading(avatarId);
 
     try {
       const data = await api.patch('/api/users/me/avatar', { avatarId });
       onAvatarChanged(data);
+      notify.success('Avatar equipped', `${avatarLabel(avatarId)} is now your avatar.`);
     } catch (err) {
-      setError(friendlyAuthError(err));
+      notify.error('Could not change avatar', friendlyAuthError(err));
     } finally {
       setLoading(null);
     }
   };
 
   const handleUnlock = async (avatarId) => {
-    setError('');
     setLoading(avatarId);
 
     try {
@@ -47,8 +52,16 @@ export default function AvatarPicker({ unlockedAvatars = [], activeAvatarId, onA
       // The unlock route equips the avatar in the same transaction, so the
       // response already carries the new active id and the debited balance.
       onAvatarChanged(data);
+
+      notify.success(
+        'Avatar unlocked',
+        typeof data.newBalance === 'number'
+          ? `${avatarLabel(avatarId)} equipped. Balance: ${data.newBalance.toFixed(1)} VLT.`
+          : `${avatarLabel(avatarId)} equipped.`
+      );
     } catch (err) {
-      setError(friendlyAuthError(err));
+      // Covers the "not enough VLT" rejection, which is the common case here.
+      notify.error('Could not unlock avatar', friendlyAuthError(err));
     } finally {
       setLoading(null);
     }
@@ -56,13 +69,8 @@ export default function AvatarPicker({ unlockedAvatars = [], activeAvatarId, onA
 
   return (
     <div>
-      {error && (
-        <div className="mb-4 p-3 rounded bg-red-900/30 border border-red-800 text-sm text-red-300 flex items-start gap-2">
-          <span className="shrink-0 mt-0.5">⚠</span>
-          <span>{error}</span>
-        </div>
-      )}
-
+      {/* Failures are reported through the notification system rather than an
+          inline banner, so the grid does not shift as messages come and go. */}
       <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
         {avatars.map((avatar) => {
           const isAvailable = isAvatarAvailable(avatar.id, unlockedAvatars);

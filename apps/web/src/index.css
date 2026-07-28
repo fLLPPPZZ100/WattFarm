@@ -37,6 +37,18 @@
       animation-iteration-count: 1 !important;
       transition-duration: 0.001ms !important;
     }
+
+    /* Exception: a notification's progress bar is not decoration, it is the
+       dismissal clock — the card is removed when this animation ends. Collapsed
+       to 0.001ms every notification would appear and disappear in the same
+       frame, so the timing has to survive even though the motion does not
+       (the bar just shrinks in place; nothing slides).
+
+       `--toast-duration` is set inline per card. A class selector outranks `*`,
+       so this wins despite both carrying !important. */
+    .animate-toast-drain {
+      animation-duration: var(--toast-duration, 4000ms) !important;
+    }
   }
 }
 

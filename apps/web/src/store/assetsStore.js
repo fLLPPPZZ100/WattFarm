@@ -42,6 +42,17 @@ export const useAssetsStore = create((set, get) => ({
     }
   },
 
+  /**
+   * Clears the last error.
+   *
+   * The shop renders `error` as a full-page block, which is right for a failed
+   * catalogue load but wrong for a rejected purchase — a player who could not
+   * afford something lost the entire shop until the next poll. Callers that
+   * report a failure themselves (a notification, say) clear it here so the page
+   * stays put.
+   */
+  clearError: () => set({ error: null }),
+
   buyAsset: async (type, quantity) => {
     set({ loading: true, error: null });
     try {

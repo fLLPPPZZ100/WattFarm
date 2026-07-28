@@ -10,6 +10,8 @@ import {
   setPlacementCallback,
 } from '../../game/GameInstance.js';
 import { usePlacementStore, resetPlacementStore } from '../../store/placementStore.js';
+import { resetNotificationStore } from '../../store/notificationStore.js';
+import NotificationStack from '../ui/NotificationStack.jsx';
 import vltCoinImg from '../../assets/coins/vlt-coin.png';
 import btcCoinImg from '../../assets/coins/btc-coin.png';
 import trxCoinImg from '../../assets/coins/trx-coin.png';
@@ -193,6 +195,7 @@ export default function AppShell() {
   function handleLogout() {
     resetAssetsStore();
     resetPlacementStore();
+    resetNotificationStore();
     logout();
   }
 
@@ -505,6 +508,14 @@ export default function AppShell() {
               </div>
             </main>
           )}
+
+          {/*
+            Notifications. Last in the content area so it paints above the farm
+            canvas and the side panels, and inside it rather than fixed to the
+            viewport: being a child of this box is what puts it below the header
+            and beside the sidebar without hardcoding either of their sizes.
+          */}
+          <NotificationStack />
         </div>
       </div>
 

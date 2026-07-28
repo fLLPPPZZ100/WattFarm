@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAssetsStore } from '../store/assetsStore';
+import { notify } from '../lib/notify.js';
 import solarPanelImg from '../assets/items/panel-1-animation.gif';
 import mount1Img from '../assets/items/mounts/mount-1.png';
 import mount2Img from '../assets/items/mounts/mount-2.png';
@@ -76,6 +77,21 @@ var SUPPORTS = [
 var GENERATOR_META = {
   solar: { label: 'Solar Panel', color: '#F2B84B', img: solarPanelImg, baseW: 1 },
 };
+
+/**
+ * Display name for an asset id, so a notification can say "Double Mount"
+ * instead of "panel-mount-double".
+ *
+ * @param {string} id
+ * @returns {string} the catalogue label, or the id itself if it is unknown
+ */
+function itemLabel(id) {
+  if (GENERATOR_META[id]) return GENERATOR_META[id].label;
+  for (var i = 0; i < SUPPORTS.length; i++) {
+    if (SUPPORTS[i].id === id) return SUPPORTS[i].label;
+  }
+  return id;
+}
 
 // ===== SINGLE UNIFIED SHOP CARD =====
 function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vltBalance, onBuy, loading }) {
@@ -226,7 +242,7 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
 // ===== MAIN SHOP PAGE =====
 export default function Shop() {
   var { user } = useAuth();
-  var { catalog, assets, totalW, vltBalance, loading, fetchCatalog, fetchMining, buyAsset, error } = useAssetsStore();
+  var { catalog, assets, totalW, vltBalance, loading, fetchCatalog, fetchMining, buyAsset, clearError, error } = useAssetsStore();
   var pollingRef = useRef(null);
   var [activeCategory, setActiveCategory] = useState('promotions');
 
@@ -245,9 +261,55 @@ export default function Shop() {
   for (var i = 0; i < assets.length; i++) { ownedMap[assets[i].type] = assets[i].quantity; }
 
   var handleBuy = async function (id, qty) {
-    // buyAsset stores the message in the store's `error`, which is rendered
-    // above; swallowing here just prevents an unhandled rejection.
-    try { await buyAsset(id, qty || 1); } catch (e) { /* surfaced via store error */ }
+    var quantity = qty || 1;
+    var label = itemLabel(id);
+
+    try {
+      var result = await buyAsset(id, quantity);
+
+      // Read the total defensively: a TypeError while building this string would
+      // be caught below and reported as a failed purchase that in fact succeeded.
+      var paid = result && typeof result.totalPrice === 'number' ? result.totalPrice : null;
+
+      notify.success(
+        'Purchase complete',
+        paid !== null
+          ? quantity + 'x ' + label + ' for ' + fmtPrice(paid) + ' VLT — now in your storage.'
+          : quantity + 'x ' + label + ' is now in your storage.'
+      );
+    } catch (err) {
+      /**
+       * The API answers an unaffordable purchase with the exact figures, so the
+       * notification can state the shortfall rather than the useless
+       * "insufficient balance". This is also the path that surfaces a price the
+       * client had wrong: the server is authoritative, and the player now sees
+       * how much is actually missing.
+       */
+      var payload = err && err.payload;
+      var shortfall =
+        payload && typeof payload.required === 'number' && typeof payload.balance === 'number'
+          ? payload.required - payload.balance
+          : null;
+
+      if (shortfall !== null && shortfall > 0) {
+        notify.error(
+          'Insufficient VLT',
+          'You need ' + fmtPrice(shortfall) + ' more VLT for ' + quantity + 'x ' + label + '.'
+        );
+      } else {
+        notify.error(
+          'Purchase failed',
+          (err && err.message) || 'Could not complete the purchase. Try again.'
+        );
+      }
+
+      /**
+       * The failure has been reported, so drop it from the store: `error` is
+       * rendered as a full-page block below, which would replace the entire shop
+       * because one purchase was refused.
+       */
+      clearError();
+    }
   };
 
   var genCatalog = catalog.filter(function (c) { return c.type === 'solar'; });
@@ -299,7 +361,13 @@ export default function Shop() {
                 {PROMOTIONS.map(function (item) {
                   return (
                     <ShopCard key={item.id} item={item} color={item.color} img={item.img}
-                      owned={0} isPromo vltBalance={vltBalance} onBuy={function () { alert('Coming soon!'); }} loading={false} />
+                      owned={0} isPromo vltBalance={vltBalance} loading={false}
+                      onBuy={function () {
+                        // Bundles are not implemented server-side yet. A blocking
+                        // window.alert for that is heavy-handed; this is the same
+                        // information without stopping the page.
+                        notify.info(item.label, 'Bundles are not available yet — coming soon.');
+                      }} />
                   );
                 })}
               </div>
