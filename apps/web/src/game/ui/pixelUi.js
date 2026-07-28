@@ -6,7 +6,7 @@
  *
  *   - no rounded corners; 2px hard borders with a bevelled light/dark edge
  *   - hard offset shadows, never blurred
- *   - Silkscreen for labels, Inter for prose, JetBrains Mono for numbers
+ *   - Silkscreen for labels, Pixelify Sans for prose, VT323 for numbers
  *   - stepped, short transitions — motion should feel digital, not springy
  *
  * Everything is built from rectangles and text, so there are no extra assets
@@ -37,9 +37,19 @@ export const CSS = {
   disabled: '#5A6675',
 };
 
-export const FONT_DISPLAY = '"Silkscreen", cursive';
-export const FONT_BODY = 'Inter, sans-serif';
-export const FONT_MONO = '"JetBrains Mono", monospace';
+/**
+ * Must stay in step with `fontFamily` in tailwind.config.js and the Google
+ * Fonts link in index.html.
+ *
+ * Phaser draws text to the canvas with its own font stack, so it does not
+ * inherit anything from the CSS. When the web UI moved off Inter and JetBrains
+ * Mono those families stopped being loaded at all, which would have left the
+ * in-game text falling back to a system font — smooth, unrelated, and the exact
+ * mismatch this module exists to avoid.
+ */
+export const FONT_DISPLAY = '"Silkscreen", monospace';
+export const FONT_BODY = '"Pixelify Sans", sans-serif';
+export const FONT_MONO = '"VT323", monospace';
 
 /**
  * Builds the layered rectangles that make a bevelled pixel surface.

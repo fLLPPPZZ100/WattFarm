@@ -6,8 +6,16 @@
     <title>WattFarm</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      All three families are pixel typefaces, so nothing in the interface falls
+      back to a smooth modern sans. Inter and JetBrains Mono used to sit here and
+      were the one part of the UI that did not match the 8-bit surfaces.
+
+      Pixelify Sans ships a variable weight axis, so 400..700 is one file rather
+      than four. VT323 is single weight by design.
+    -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Silkscreen:wght@400;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Silkscreen:wght@400;700&family=VT323&display=swap"
       rel="stylesheet"
     />
   </head>

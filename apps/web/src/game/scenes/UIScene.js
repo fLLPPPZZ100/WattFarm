@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH } from '../config.js';
+import { FONT_BODY, FONT_MONO } from '../ui/pixelUi.js';
 
 /**
  * UIScene — overlay HUD running parallel to FarmScene.
@@ -25,7 +26,7 @@ export default class UIScene extends Phaser.Scene {
     // W label
     this.add
       .text(12, 8, 'W', {
-        fontFamily: 'Inter, sans-serif',
+        fontFamily: FONT_BODY,
         fontSize: '11px',
         color: '#7C8CA0',
       })
@@ -34,7 +35,7 @@ export default class UIScene extends Phaser.Scene {
     // W value (mono font for tabular numbers)
     this.wText = this.add
       .text(12, 20, '0.0', {
-        fontFamily: '"JetBrains Mono", monospace',
+        fontFamily: FONT_MONO,
         fontSize: '16px',
         color: '#5FD4C4',
       })
@@ -43,7 +44,7 @@ export default class UIScene extends Phaser.Scene {
     // VLT value (right-aligned)
     this.vltText = this.add
       .text(GAME_WIDTH - 12, 14, '0.0 VLT', {
-        fontFamily: '"JetBrains Mono", monospace',
+        fontFamily: FONT_MONO,
         fontSize: '14px',
         color: '#F2B84B',
       })

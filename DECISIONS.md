@@ -134,6 +134,21 @@ are.
 - `apps/api/.env`: `DATABASE_URL`, `GOOGLE_APPLICATION_CREDENTIALS` or `FIREBASE_SERVICE_ACCOUNT_JSON`
 
 ## Fonts
-- Display (pixel): Silkscreen — section titles, W, VLT
-- Body: Inter — forms, menus, paragraphs
-- Mono tabular: JetBrains Mono — live counters to prevent digit-width layout shift
+All three are pixel typefaces. The interface is 2D throughout — 8-bit panels,
+hard shadows, no border radius, a CRT scanline overlay — and Inter sitting in the
+middle of that was the one element that read as a different product.
+
+- Display: **Silkscreen** — section titles, buttons, W and VLT labels. A true
+  bitmap face, so it is the only one with font smoothing switched off.
+- Body: **Pixelify Sans** — forms, menus, paragraphs. Chosen over the other pixel
+  faces because it stays legible at paragraph length and has a real weight axis
+  (400..700), which Silkscreen and VT323 do not.
+- Mono: **VT323** — live counters, balances, inputs. Genuinely monospaced, which
+  is the entire reason this slot exists: a proportional font makes a ticking
+  counter jump as digit widths change. It replaced JetBrains Mono, which held the
+  same job but was not a pixel face.
+
+Smoothing is left on for body and mono on purpose. Pixelify Sans and VT323 are
+outline fonts drawn to *look* pixelated rather than true bitmaps, so disabling
+smoothing makes them ragged at any size that is not a whole multiple of their
+internal grid.
