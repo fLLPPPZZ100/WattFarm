@@ -31,6 +31,31 @@ function calcTotalPrice(unitPrice, qty) {
   return Math.round(unitPrice * qty * 100) / 100;
 }
 
+/**
+ * Most units buyable in one transaction.
+ *
+ * The server enforces the same ceiling (`MAX_PURCHASE_QUANTITY` in
+ * routes/assets.js) and rejects anything above it, so this is only here to keep
+ * the selector from offering a quantity that is guaranteed to fail. Keep both
+ * values in sync.
+ */
+var MAX_QTY = 99;
+
+/**
+ * Keeps a quantity inside 1..MAX_QTY.
+ *
+ * Every control that changes the quantity goes through this. The `+` button and
+ * the text input previously incremented and parsed without a ceiling, so typing
+ * or clicking past 99 produced a total the server would refuse.
+ *
+ * @param {number} n
+ * @returns {number}
+ */
+function clampQty(n) {
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(MAX_QTY, Math.max(1, Math.floor(n)));
+}
+
 var CATEGORIES = [
   { key: 'promotions', label: 'Promotions', icon: '🔥' },
   { key: 'generators', label: 'Generators', icon: '⚡' },
@@ -120,10 +145,33 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
       {showPurchaseSystem && (
         <div className="flex items-center gap-2">
           <span className="text-text-muted text-xs">Qty:</span>
-          <button onClick={function () { setQty(Math.max(1, qty - 1)); }} className="w-8 h-8 rounded bg-bg-panel border border-line-dusk text-text-muted hover:text-text-primary text-base font-bold flex items-center justify-center">−</button>
-          <input type="text" inputMode="numeric" value={qty} onChange={function (e) { var v = parseInt(e.target.value, 10); if (!isNaN(v) && v >= 1) setQty(v); else if (e.target.value === '') setQty(1); }} className="w-16 h-8 text-center bg-bg-abyss border border-line-dusk rounded text-text-primary text-sm font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" aria-label="Quantity" />
-          <button onClick={function () { setQty(qty + 1); }} className="w-8 h-8 rounded bg-bg-panel border border-line-dusk text-text-muted hover:text-text-primary text-base font-bold flex items-center justify-center">+</button>
-          <button onClick={function () { setQty(99); }} className="text-accent-watt text-xs font-semibold hover:underline ml-1">MAX</button>
+          <button
+            onClick={function () { setQty(clampQty(qty - 1)); }}
+            disabled={qty <= 1}
+            className="w-8 h-8 rounded bg-bg-panel border border-line-dusk text-text-muted hover:text-text-primary text-base font-bold flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-text-muted"
+            aria-label="Decrease quantity"
+          >−</button>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={qty}
+            onChange={function (e) {
+              // An empty field is a legitimate intermediate state while typing,
+              // so it falls back to 1 rather than rejecting the keystroke.
+              if (e.target.value === '') { setQty(1); return; }
+              var v = parseInt(e.target.value, 10);
+              if (!isNaN(v)) setQty(clampQty(v));
+            }}
+            className="w-16 h-8 text-center bg-bg-abyss border border-line-dusk rounded text-text-primary text-sm font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            aria-label="Quantity"
+          />
+          <button
+            onClick={function () { setQty(clampQty(qty + 1)); }}
+            disabled={qty >= MAX_QTY}
+            className="w-8 h-8 rounded bg-bg-panel border border-line-dusk text-text-muted hover:text-text-primary text-base font-bold flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-text-muted"
+            aria-label="Increase quantity"
+          >+</button>
+          <button onClick={function () { setQty(MAX_QTY); }} className="text-accent-watt text-xs font-semibold hover:underline ml-1">MAX</button>
         </div>
       )}
 
@@ -149,7 +197,7 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
 
           {/* Buy button */}
           <button
-            onClick={function () { onBuy(item.id || item.type, qty); }}
+            onClick={function () { onBuy(item.id || item.type, clampQty(qty)); }}
             disabled={!canBuy || loading}
             className={'mt-auto w-full font-semibold py-2.5 rounded text-sm transition-all ' +
               (canBuy

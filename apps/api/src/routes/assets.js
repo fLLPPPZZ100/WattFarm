@@ -19,8 +19,15 @@ const router = Router();
 /** Types a player may buy. Anything else is rejected before touching the database. */
 const PURCHASABLE_TYPES = ['solar', 'panel-mount', 'panel-mount-double'];
 
-/** Upper bound on a single purchase, to keep quantities and totals sane. */
-const MAX_PURCHASE_QUANTITY = 1000;
+/**
+ * Upper bound on a single purchase.
+ *
+ * This is the authoritative limit: the shop's quantity selector caps at the
+ * same number, but a client can post any body it likes, so the value that
+ * actually matters is enforced here. Keep it in sync with `MAX_QTY` in
+ * apps/web/src/pages/MyAssets.jsx.
+ */
+const MAX_PURCHASE_QUANTITY = 99;
 
 /**
  * Computes the total cost of buying `qty` units of an asset with exponential
