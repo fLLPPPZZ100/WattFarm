@@ -45,6 +45,32 @@ function MenuIcon({ img, emoji }) {
   );
 }
 
+/**
+ * Phaser canvas size. Must match the game config — the side panels are placed
+ * relative to these numbers, so a mismatch shifts them off the canvas edge.
+ */
+const GAME_WIDTH = 960;
+const GAME_HEIGHT = 640;
+
+/** Gap between the canvas and each side panel. */
+const PANEL_GAP = 12;
+
+/**
+ * Distance from the horizontal centre to the outer edge of a side panel.
+ *
+ * The canvas is centred, so half of it plus the gap is where a panel's inner
+ * edge belongs. Anchoring the panels to the centre rather than to the viewport
+ * edges is what keeps the gap constant: pinned to `left-4`/`right-4` they drifted
+ * away from the canvas as the window widened, and overlapped it as it narrowed.
+ */
+const PANEL_OFFSET = GAME_WIDTH / 2 + PANEL_GAP;
+
+/** Vertically centred, level with the middle of the canvas. */
+const CENTRED_ROW = {
+  top: '50%',
+  transform: 'translateY(-50%)',
+};
+
 const NAV_LINKS = [
   { to: '/', label: 'Farm', icon: '🌱' },
   { to: '/shop', label: 'Shop', img: shopIconImg },
@@ -396,8 +422,22 @@ export default function AppShell() {
           {/* 3-column layout: power panel (left) + game viewport (center) + ad space (right) */}
           {isFarmView && user && (
             <>
-              {/* LEFT: Power Panel */}
-              <div className="absolute left-4 top-4 z-10 hidden lg:block">
+              {/*
+                LEFT: Power Panel — its right edge sits PANEL_GAP left of the canvas.
+
+                The `min-[1576px]` breakpoint is arithmetic, not taste. A centred
+                canvas is symmetric, so the wider of the two panels sets the
+                requirement for both: 960 + 2 x (176 + 12) = 1336px of content,
+                plus the 240px sidebar. Below that a panel would be clipped by the
+                container's overflow, so both are hidden instead.
+
+                The old `lg:` (1024px) threshold is why the panels used to sit on
+                top of the canvas on a laptop.
+              */}
+              <div
+                className="absolute z-10 hidden min-[1576px]:block"
+                style={{ ...CENTRED_ROW, right: `calc(50% + ${PANEL_OFFSET}px)` }}
+              >
                 <div className="flex flex-col gap-3 bg-bg-panel/80 backdrop-blur-sm border border-line-dusk rounded-xl p-4 w-[176px]">
                   <div>
                     <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Your Power</p>
@@ -431,7 +471,10 @@ export default function AppShell() {
 
               {/* RIGHT: Ad placeholder */}
               {/* TODO: replace with a real ad integration (e.g. AdSense, AdinPlay) once chosen */}
-              <div className="absolute right-4 top-4 z-10 hidden xl:block">
+              <div
+                className="absolute z-10 hidden min-[1576px]:block"
+                style={{ ...CENTRED_ROW, left: `calc(50% + ${PANEL_OFFSET}px)` }}
+              >
                 <div className="flex items-center justify-center border border-dashed border-line-dusk rounded-xl bg-bg-panel/40 w-[160px] h-[600px]">
                   <span className="text-xs text-text-muted text-center px-2">
                     Ad Space<br />160×600
@@ -441,8 +484,18 @@ export default function AppShell() {
             </>
           )}
 
-          {/* #phaser-root always in DOM — Phaser canvas attaches here at mount */}
-          <div id="phaser-root" className="absolute left-1/2 top-3 -translate-x-1/2 z-0" style={{ width: '960px', height: '640px' }} />
+          {/*
+            #phaser-root always in DOM — Phaser canvas attaches here at mount and
+            survives navigation, so it must not be inside the isFarmView branch.
+
+            Centred on both axes. It used to be pinned near the top (`top-3`),
+            which left the panels and the canvas anchored to different things.
+          */}
+          <div
+            id="phaser-root"
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-0"
+            style={{ width: `${GAME_WIDTH}px`, height: `${GAME_HEIGHT}px` }}
+          />
 
           {/* Non-dashboard routes */}
           {!isFarmView && (
