@@ -96,19 +96,6 @@ export function shutdown() {
   }
 }
 
-/**
- * Re-reads the layout and the grid rules from the server.
- *
- * Needed after something outside the canvas changes what the farm is allowed to
- * be — buying a grid expansion is the case that exists today. The scene owns its
- * geometry, so React asks it to refresh rather than trying to mutate it.
- */
-export function reloadFarm() {
-  if (!game) return;
-  const farm = game.scene.getScene('FarmScene');
-  if (farm && farm.loadLayoutFromServer) farm.loadLayoutFromServer({ silent: true });
-}
-
 export function sync(assets, mountCount, solarCount) {
   if (!game) return;
   var farm = game.scene.getScene('FarmScene');

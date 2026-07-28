@@ -157,7 +157,7 @@ if (isProduction && !REQUIRE_VERIFIED_EMAIL) {
  *
  * 40 is the default: a full grid takes a couple of evenings rather than an
  * afternoon, and it still leaves 42% of the budget unclaimed so future tiers
- * and grid expansions have somewhere to go.
+ * have somewhere to go.
  */
 const rawBaseline = process.env.NETWORK_POWER_BASELINE ?? '40';
 const NETWORK_POWER_BASELINE = Number.parseFloat(rawBaseline);

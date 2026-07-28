@@ -18,7 +18,6 @@ model User {
   vltBalance      Decimal            @default(0) @db.Decimal(18, 4)
   avatarId        String             @default("default")
   unlockedAvatars String[]           @default(["default"])
-  gridRows        Int                @default(4)
   createdAt       DateTime           @default(now())
 
   /// Public invite code. Generated server-side from a CSPRNG, never derived
@@ -194,7 +193,10 @@ model ReferralCommission {
 model LedgerEntry {
   id        String   @id @default(uuid())
   userId    String
-  kind      String // "purchase" | "avatar-unlock" | "grid-expansion" | "referral-commission"
+  // "purchase" | "avatar-unlock" | "referral-commission"
+  // Historical rows may also carry "grid-expansion", from a feature that was
+  // removed. The ledger is an audit trail, so those entries are kept.
+  kind      String
   // Always positive; `kind` implies direction. Everything here was a debit until
   // "referral-commission", which is a credit — so read the sign from `kind`,
   // never from the value.

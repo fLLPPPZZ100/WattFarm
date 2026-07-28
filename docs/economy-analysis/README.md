@@ -17,11 +17,16 @@
 > - **Minigame yield** — the loot table was tripled to an EV of 0.55 VLT per
 >   play (96.95% miss, 10/50/100 VLT). The figures quoted below (0.175 EV,
 >   98.65% miss) are the old table.
-> - **Endgame sink** — grid expansion exists: one row at a time to 8, at
->   `50000 × 4^(rows - 4)` VLT, and it is purchasable from the Shop.
+> Still open, and note this document recommends both:
 >
-> Still open: wind and hydro remain dormant, so 100 of the 150 VLT per cycle are
-> never distributed. See `DECISIONS.md` for what the build does today.
+> - **Endgame sink** — the grid expansion proposed below was built and then
+>   removed, because eight rows do not fit the grass band in the background art
+>   at canvas size. The grid is a fixed 14 × 4. Any endgame sink will have to be
+>   something other than more field; see `DECISIONS.md` § Grid.
+> - **Wind and hydro** remain dormant, so 100 of the 150 VLT per cycle are never
+>   distributed.
+>
+> See `DECISIONS.md` for what the build does today.
 
 ---
 

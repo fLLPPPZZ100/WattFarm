@@ -43,7 +43,7 @@ import env from '../config/env.js';
  * income, which is the kind of mistake that is only noticed after the currency
  * has been handed out.
  */
-const SPENDING_LEDGER_KINDS = ['purchase', 'avatar-unlock', 'grid-expansion'];
+const SPENDING_LEDGER_KINDS = ['purchase', 'avatar-unlock'];
 
 /** Ledger kind used for the credit itself. */
 export const COMMISSION_LEDGER_KIND = 'referral-commission';

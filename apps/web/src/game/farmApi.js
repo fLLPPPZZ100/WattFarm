@@ -63,7 +63,6 @@ export async function saveLayout(mounts) {
       ok: true,
       powerRate: data.powerRate ?? 0,
       networkBaseline: data.networkBaseline ?? 0,
-      config: data.config ?? null,
     };
   } catch (err) {
     if (err instanceof ApiError) {

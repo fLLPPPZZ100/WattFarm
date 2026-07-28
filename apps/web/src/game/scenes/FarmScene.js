@@ -36,33 +36,11 @@ import {
 
 const TILE = 64;
 const GRID_COLS = 14;
+const GRID_ROWS = 4;
 const GRID_OFFSET_X = 32; // 32 + 14*64 = 928, leaving a 32px right margin
+const GRID_OFFSET_Y = 344; // 344 + 4*64 = 600, exactly the toolbar line
 
 const TOOLBAR_H = 40;
-
-/** Rows every account starts with. Must match GRID_DEFAULT_ROWS on the server. */
-const GRID_DEFAULT_ROWS = 4;
-
-/**
- * The grid's bottom edge, which is the toolbar line. Rows are laid out *upwards*
- * from here, so buying an expansion adds a row at the far end of the field
- * rather than moving the ones already built.
- */
-const GRID_BOTTOM_Y = GAME_HEIGHT - TOOLBAR_H; // 600
-
-/**
- * Where grass becomes solid in background-game.png, as a fraction of its height.
- * Measured from the art: at the default 960x640 fit the horizon lands on y=348.
- *
- * This matters because an expanded grid needs a taller grass band than the
- * default fit provides. Four 64px rows need 256px and the default fit gives
- * ~292px, but eight rows need 512px — more grass than the image shows at that
- * size. `layoutBackground` scales the image up and slides it down so the horizon
- * always sits at or above the first row, trading sky for field as the farm
- * grows. The alternative would be shrinking the tile, and downscaling 64px
- * pixel art by a non-integer factor destroys it.
- */
-const HORIZON_FRACTION = 348 / 640;
 
 /**
  * Mount definitions. Slot offsets are measured from the sprites:
@@ -174,12 +152,6 @@ export default class FarmScene extends Phaser.Scene {
     this.doubleMountsOwned = 0;
     this.solarsOwned = 0;
 
-    /**
-     * Rows the player owns. Replaced by the server's figure on every layout
-     * load; the default is only what renders before the first response.
-     */
-    this.gridRows = GRID_DEFAULT_ROWS;
-
     this.popup = null;
     this.toasts = null;
 
@@ -194,8 +166,8 @@ export default class FarmScene extends Phaser.Scene {
   }
 
   create() {
-    this.bg = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'bg_game');
-    this.layoutBackground();
+    const bg = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'bg_game');
+    bg.setDisplaySize(GAME_WIDTH, GAME_HEIGHT);
 
     // Cables sit behind the mounts so they read as running along the ground.
     this.cableLayer = this.add.container(0, 0).setDepth(DEPTH.cables);
@@ -228,50 +200,12 @@ export default class FarmScene extends Phaser.Scene {
 
   /* ══ GEOMETRY ══ */
 
-  /**
-   * Top edge of the grid. Derived from the row count rather than fixed, because
-   * the grid is anchored to the toolbar line and grows upwards.
-   */
-  gridTopY() {
-    return GRID_BOTTOM_Y - this.gridRows * TILE;
-  }
-
-  /**
-   * Fits the background to the current row count.
-   *
-   * At the default row count this is exactly the old behaviour — the image
-   * stretched to the canvas — so nothing moves for a player who has not bought
-   * an expansion. Beyond that the image is scaled up and positioned so its
-   * horizon meets the top of the grid, which is the only way to keep every row
-   * standing on grass without shrinking the tile.
-   */
-  layoutBackground() {
-    if (!this.bg) return;
-
-    const top = this.gridTopY();
-    const grassNeeded = GRID_BOTTOM_Y - top;
-
-    // Grass occupies everything below the horizon in the source art.
-    const height = Math.max(GAME_HEIGHT, Math.ceil(grassNeeded / (1 - HORIZON_FRACTION)));
-
-    this.bg.setOrigin(0, 0);
-    this.bg.setDisplaySize(GAME_WIDTH, height);
-
-    if (height === GAME_HEIGHT) {
-      this.bg.setPosition(0, 0);
-      return;
-    }
-
-    // Slide the image up so its horizon lands on the grid's top edge.
-    this.bg.setPosition(0, top - height * HORIZON_FRACTION);
-  }
-
   cellCentreX(col) {
     return GRID_OFFSET_X + col * TILE + TILE / 2;
   }
 
   cellCentreY(row) {
-    return this.gridTopY() + row * TILE + TILE / 2;
+    return GRID_OFFSET_Y + row * TILE + TILE / 2;
   }
 
   /**
@@ -307,7 +241,7 @@ export default class FarmScene extends Phaser.Scene {
   }
 
   inBounds(col, row) {
-    return col >= 0 && col < GRID_COLS && row >= 0 && row < this.gridRows;
+    return col >= 0 && col < GRID_COLS && row >= 0 && row < GRID_ROWS;
   }
 
   canPlaceAt(type, col, row) {
@@ -444,7 +378,7 @@ export default class FarmScene extends Phaser.Scene {
   showEditGrid() {
     this.hideEditGrid();
 
-    for (let row = 0; row < this.gridRows; row += 1) {
+    for (let row = 0; row < GRID_ROWS; row += 1) {
       for (let col = 0; col < GRID_COLS; col += 1) {
         const cx = this.cellCentreX(col);
         const cy = this.cellCentreY(row);
@@ -925,7 +859,7 @@ export default class FarmScene extends Phaser.Scene {
 
     // Wire each row independently: a run of cable across rows would have to
     // cross the field, which is not how a panel row is actually strung.
-    for (let row = 0; row < this.gridRows; row += 1) {
+    for (let row = 0; row < GRID_ROWS; row += 1) {
       const powered = this.mounts
         .filter((m) => m.getData('gridRow') === row && this.isPowered(m))
         .sort((a, b) => a.getData('gridCol') - b.getData('gridCol'));
@@ -1059,20 +993,6 @@ export default class FarmScene extends Phaser.Scene {
       this.serverPowerRate = result.powerRate;
       this.networkBaseline = result.networkBaseline;
 
-      /**
-       * A save also reports the grid size, so an expansion bought elsewhere
-       * shows up here. A reload rather than an in-place adjustment: changing the
-       * row count moves every row's y position, and rebuilding from the
-       * authoritative layout is cheaper to reason about than repositioning each
-       * container and its children by hand. It only happens the once, when the
-       * size actually changed.
-       */
-      const rows = Number(result.config?.grid?.rows);
-      if (Number.isInteger(rows) && rows >= 1 && rows !== this.gridRows) {
-        await this.loadLayoutFromServer({ silent: true });
-        return;
-      }
-
       this.refreshToolbar();
     } else {
       /**
@@ -1086,25 +1006,6 @@ export default class FarmScene extends Phaser.Scene {
     }
 
     if (this.savePending) this.queueSave();
-  }
-
-  /**
-   * Adopts a row count reported by the server.
-   *
-   * Ignores anything that is not a positive integer, so a malformed or missing
-   * config leaves the farm at its current size instead of collapsing it.
-   *
-   * @param {unknown} rows
-   * @returns {boolean} true when the value changed
-   */
-  applyGridRows(rows) {
-    const next = Number(rows);
-    if (!Number.isInteger(next) || next < 1) return false;
-    if (next === this.gridRows) return false;
-
-    this.gridRows = next;
-    this.layoutBackground();
-    return true;
   }
 
   /** Clears the scene of mounts, cables and pulses. */
@@ -1140,13 +1041,6 @@ export default class FarmScene extends Phaser.Scene {
 
     this.serverPowerRate = data.powerRate;
     this.networkBaseline = data.networkBaseline;
-
-    /**
-     * The row count is server-owned: it is what the layout is validated against,
-     * and it changes when the player buys an expansion. Applied before any mount
-     * is created, since `canPlaceAt` below depends on it.
-     */
-    this.applyGridRows(data.config?.grid?.rows);
 
     let skipped = 0;
 

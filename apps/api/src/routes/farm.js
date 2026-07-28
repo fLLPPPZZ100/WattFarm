@@ -6,7 +6,6 @@ import { withUserLock, UserNotFoundError } from '../lib/userLock.js';
 import {
   MOUNT_TYPES,
   PANEL_ASSET_TYPE,
-  GRID_DEFAULT_ROWS,
   cellsFor,
   withinGrid,
   publicConfig,
@@ -37,9 +36,8 @@ function serialiseMount(mount) {
  *
  * @param {unknown} mounts
  * @param {Record<string, number>} owned quantity owned per asset type
- * @param {number} [gridRows] player's current grid rows
  */
-function validateLayout(mounts, owned, gridRows = GRID_DEFAULT_ROWS) {
+function validateLayout(mounts, owned) {
   const problems = [];
 
   if (!Array.isArray(mounts)) return ['`mounts` must be an array'];
@@ -64,7 +62,7 @@ function validateLayout(mounts, owned, gridRows = GRID_DEFAULT_ROWS) {
       return;
     }
 
-    if (!withinGrid(mount.type, col, row, gridRows)) {
+    if (!withinGrid(mount.type, col, row)) {
       problems.push(`mount ${index}: does not fit the grid at (${col}, ${row})`);
       return;
     }
@@ -118,15 +116,10 @@ function validateLayout(mounts, owned, gridRows = GRID_DEFAULT_ROWS) {
  */
 router.get('/layout', verifyAuth, async (req, res) => {
   try {
-    const [mounts, user] = await Promise.all([
-      prisma.placedMount.findMany({
-        where: { userId: req.uid },
-        orderBy: [{ row: 'asc' }, { col: 'asc' }],
-      }),
-      // The row count is part of the rules the client renders from, so it has to
-      // travel with them rather than being assumed to be the default.
-      prisma.user.findUnique({ where: { id: req.uid }, select: { gridRows: true } }),
-    ]);
+    const mounts = await prisma.placedMount.findMany({
+      where: { userId: req.uid },
+      orderBy: [{ row: 'asc' }, { col: 'asc' }],
+    });
 
     const powerRate = computePowerRate(mounts);
 
@@ -134,7 +127,7 @@ router.get('/layout', verifyAuth, async (req, res) => {
       mounts: mounts.map(serialiseMount),
       powerRate,
       networkBaseline: env.NETWORK_POWER_BASELINE,
-      config: publicConfig(user?.gridRows ?? GRID_DEFAULT_ROWS),
+      config: publicConfig(),
     });
   } catch (err) {
     console.error('[farm/layout] read failed:', err);
@@ -160,11 +153,7 @@ router.put('/layout', verifyAuthStrict, configLimiter, async (req, res) => {
       const owned = {};
       for (const asset of assets) owned[asset.type] = asset.quantity;
 
-      // Read the user's grid size for expansion support.
-      const user = await tx.user.findUnique({ where: { id: req.uid }, select: { gridRows: true } });
-      const gridRows = user?.gridRows ?? GRID_DEFAULT_ROWS;
-
-      const problems = validateLayout(submitted, owned, gridRows);
+      const problems = validateLayout(submitted, owned);
       if (problems.length > 0) {
         return { status: 400, body: { error: 'Invalid layout', problems } };
       }
@@ -195,9 +184,6 @@ router.put('/layout', verifyAuthStrict, configLimiter, async (req, res) => {
           mounts: stored.map(serialiseMount),
           powerRate: computePowerRate(stored),
           networkBaseline: env.NETWORK_POWER_BASELINE,
-          // Echoed so a save is also a chance for the client to notice a grid
-          // that grew in another tab.
-          config: publicConfig(gridRows),
         },
       };
     });

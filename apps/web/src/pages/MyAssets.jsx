@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useAssetsStore } from '../store/assetsStore';
 import { notify } from '../lib/notify.js';
-import { reloadFarm } from '../game/GameInstance.js';
 import solarPanelImg from '../assets/items/panel-1-animation.gif';
 import mount1Img from '../assets/items/mounts/mount-1.png';
 import mount2Img from '../assets/items/mounts/mount-2.png';
@@ -59,15 +58,13 @@ var CATEGORIES = [
   { key: 'promotions', label: 'Promotions', icon: '🔥' },
   { key: 'generators', label: 'Generators', icon: '⚡' },
   { key: 'supports', label: 'Supports', icon: '🔧' },
-  { key: 'expansion', label: 'Expansion', icon: '🌾' },
 ];
 
-/** Per-category accent. Expansion borrows the growth-green of the field. */
+/** Per-category accent, so the shelves do not all read as the same blue. */
 var CATEGORY_ACCENT = {
   promotions: '#F5923B',
   generators: '#F2B84B',
   supports: '#6FB7D6',
-  expansion: '#7FC96B',
 };
 
 var DEFAULT_COLOR = '#2A3B4D';
@@ -401,134 +398,10 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
   );
 }
 
-/* ── Grid expansion card ────────────────────────────────────────────
-   The one product that is not an inventory item: it buys a row of field.
-
-   Kept as its own component rather than bent into ShopCard, because what it
-   sells is a capacity, so it has no art, no quantity and no per-unit price —
-   only the current size and the cost of the next row. Both figures come from
-   /api/assets/grid-info; nothing about the cost curve is duplicated here. */
-function ExpansionCard({ info, cols, vltBalance, loading, onExpand }) {
-  var accent = CATEGORY_ACCENT.expansion;
-
-  var rows = info ? info.currentRows : null;
-  var maxRows = info ? info.maxRows : null;
-  var cost = info ? info.nextExpansionCost : null;
-  var atMax = cost === null || cost === undefined;
-  var canBuy = !atMax && cost <= vltBalance;
-  var insufficient = !atMax && cost > vltBalance;
-
-  return (
-    <article
-      className="group relative flex h-full flex-col overflow-hidden rounded-xl border-2 border-line-dusk bg-[#101d2b]
-                 shadow-[6px_7px_0_#07101a,0_18px_32px_-20px_rgba(0,0,0,0.9)] transition-all duration-200 ease-out
-                 hover:-translate-y-1 hover:border-[color:var(--card-border)] hover:shadow-[6px_9px_0_#07101a,0_24px_42px_-18px_var(--card-glow)]"
-      style={{ '--card-glow': withAlpha(accent, 0.38), '--card-border': withAlpha(accent, 0.68) }}
-    >
-      <div className="h-1.5 w-full shrink-0" style={{ background: accent, boxShadow: '0 0 14px ' + withAlpha(accent, 0.6) }} />
-
-      {/* A diagram of the field instead of an item sprite: filled rows are what
-          you have, the outlined one is what this purchase adds. */}
-      <div
-        className="relative mx-3 mt-3 flex h-[190px] items-center justify-center overflow-hidden border border-white/5"
-        style={{
-          background:
-            'radial-gradient(circle at 50% 38%, ' + withAlpha(accent, 0.25) + ', rgba(11,22,34,0) 62%), ' +
-            'linear-gradient(180deg, #1a3048 0%, #0b1724 100%)',
-        }}
-      >
-        <div className="pointer-events-none absolute inset-0 opacity-25 pixel-grid" aria-hidden="true" />
-        <div className="relative flex flex-col gap-1.5">
-          {rows === null
-            ? null
-            : Array.from({ length: Math.min(maxRows || rows, 8) }).map(function (_unused, i) {
-                var ownedRow = i < rows;
-                var nextRow = i === rows && !atMax;
-                return (
-                  <div
-                    key={i}
-                    className="h-4 w-[176px] border-2 transition-all duration-200"
-                    style={{
-                      borderColor: ownedRow ? accent : nextRow ? withAlpha(accent, 0.7) : '#26384a',
-                      background: ownedRow
-                        ? withAlpha(accent, 0.55)
-                        : nextRow
-                          ? withAlpha(accent, 0.12)
-                          : 'transparent',
-                      borderStyle: nextRow ? 'dashed' : 'solid',
-                    }}
-                  />
-                );
-              })}
-        </div>
-      </div>
-
-      <div className="flex flex-1 flex-col gap-4 p-5 pt-4">
-        <h3 className="text-heading-lg text-text-primary">Farm Expansion</h3>
-
-        <div
-          className="flex min-h-[62px] items-center gap-3 border-l-4 px-3 py-2.5"
-          style={{ borderColor: accent, background: withAlpha(accent, 0.09) }}
-        >
-          <span className="text-2xl leading-none" aria-hidden="true">▤</span>
-          <div className="min-w-0">
-            <span className="block font-display text-lg font-semibold leading-tight" style={{ color: accent }}>
-              {atMax ? 'MAX SIZE' : '+' + cols + ' CELLS'}
-            </span>
-            <span className="mt-1 block font-mono text-[11px] text-text-muted">
-              {rows === null ? 'Loading…' : rows + ' / ' + maxRows + ' rows'}
-            </span>
-          </div>
-        </div>
-
-        <div className="mt-auto flex flex-col gap-3 border-t border-line-dusk/70 pt-4">
-          <div className="flex min-h-[45px] items-center justify-center gap-2">
-            {atMax ? (
-              <span className="font-display text-sm uppercase tracking-wide text-text-muted">
-                Fully expanded
-              </span>
-            ) : (
-              <>
-                <img
-                  src={vltCoinImg}
-                  alt="VLT"
-                  width="26"
-                  height="26"
-                  style={
-                    insufficient
-                      ? { imageRendering: 'pixelated', filter: 'grayscale(0.5) sepia(1) hue-rotate(-30deg) saturate(4) brightness(0.9)' }
-                      : { imageRendering: 'pixelated', filter: 'drop-shadow(0 0 7px rgba(242,184,75,0.55))' }
-                  }
-                />
-                <span className={'font-mono text-[26px] font-bold ' + (insufficient ? 'text-danger-crt' : 'text-accent-watt')}>
-                  {fmtPrice(cost)}
-                </span>
-                <span className={'font-display text-sm uppercase tracking-wide ' + (insufficient ? 'text-danger-crt/80' : 'text-accent-watt/80')}>
-                  VLT
-                </span>
-              </>
-            )}
-          </div>
-
-          <BuyButton
-            enabled={canBuy}
-            loading={loading}
-            label={atMax ? 'Maxed' : 'Expand'}
-            onClick={onExpand}
-          />
-        </div>
-      </div>
-    </article>
-  );
-}
-
 // ===== MAIN SHOP PAGE =====
 export default function Shop() {
   var { user } = useAuth();
-  var store = useAssetsStore();
-  var { catalog, assets, vltBalance, loading, fetchCatalog, fetchMining, buyAsset, clearError, error } = store;
-  var gridInfo = store.gridInfo;
-  var gridLoading = store.gridLoading;
+  var { catalog, assets, vltBalance, loading, fetchCatalog, fetchMining, buyAsset, clearError, error } = useAssetsStore();
   var pollingRef = useRef(null);
   var [activeCategory, setActiveCategory] = useState('promotions');
 
@@ -536,43 +409,9 @@ export default function Shop() {
     if (!user) return;
     fetchCatalog();
     fetchMining();
-    store.fetchGridInfo();
     pollingRef.current = setInterval(fetchMining, 4000);
     return function () { clearInterval(pollingRef.current); };
-    // `store` is a stable zustand snapshot for the actions used here; listing it
-    // would re-run this effect on every balance tick and restart the poller.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, fetchCatalog, fetchMining]);
-
-  /**
-   * Buys one extra row of field.
-   *
-   * The cost curve, the cap and the debit all live on the server; this only
-   * reports the outcome and asks the canvas to re-read its geometry, because the
-   * scene owns the grid it draws.
-   */
-  var handleExpand = async function () {
-    try {
-      var result = await store.expandGrid();
-      reloadFarm();
-      notify.success(
-        'Farm expanded',
-        'Row ' + (result && result.gridRows ? result.gridRows : '') + ' is ready to build on.'
-      );
-    } catch (err) {
-      var payload = err && err.payload;
-      var shortfall =
-        payload && typeof payload.required === 'number' && typeof payload.balance === 'number'
-          ? payload.required - payload.balance
-          : null;
-
-      if (shortfall !== null && shortfall > 0) {
-        notify.error('Insufficient VLT', 'You need ' + fmtPrice(shortfall) + ' more VLT to expand.');
-      } else {
-        notify.error('Could not expand', (err && err.message) || 'Try again in a moment.');
-      }
-    }
-  };
 
   // No unauthenticated branch: RequireAuth gates this route.
   if (error) { return (<div className="flex items-center justify-center py-32"><div className="bg-red-900/20 border border-red-800 rounded-lg p-6 text-center max-w-md"><p className="text-red-400 text-sm">{error}</p></div></div>); }
@@ -686,7 +525,7 @@ export default function Shop() {
 
       {/* Horizontal shop shelves free the full width for products and do not read like admin navigation. */}
       <nav
-        className="relative flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-4 sm:overflow-visible sm:pb-0"
+        className="relative flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0"
         aria-label="Shop categories"
       >
         {CATEGORIES.map(function (cat) {
@@ -768,24 +607,6 @@ export default function Shop() {
                     }} />
                 );
               })}
-            </div>
-          </section>
-        )}
-
-        {activeCategory === 'expansion' && (
-          <section key="expansion" className="animate-shop-enter">
-            <div className="mb-4 flex items-center gap-3">
-              <h2 className="text-heading-lg" style={{ color: sectionAccent }}>🌾 EXPANSION</h2>
-              <span className="h-px flex-1" style={{ background: withAlpha(sectionAccent, 0.28) }} />
-            </div>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              <ExpansionCard
-                info={gridInfo}
-                cols={gridInfo && gridInfo.currentRows ? gridInfo.totalCells / gridInfo.currentRows : 14}
-                vltBalance={vltBalance}
-                loading={gridLoading}
-                onExpand={handleExpand}
-              />
             </div>
           </section>
         )}

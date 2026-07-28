@@ -13,24 +13,14 @@
 /** Number of columns in the grid (fixed). */
 export const GRID_COLS = 14;
 
-/** Default number of rows before any grid expansion. */
-export const GRID_DEFAULT_ROWS = 4;
+/** Number of rows in the grid (fixed). */
+export const GRID_ROWS = 4;
 
 /** Grid dimensions. Matches the grass band measured from the background art. */
 export const GRID = Object.freeze({
   cols: GRID_COLS,
-  rows: GRID_DEFAULT_ROWS,
+  rows: GRID_ROWS,
 });
-
-/**
- * Returns a grid descriptor for the given number of rows.
- * Used when a player has expanded their grid beyond the default.
- * @param {number} rows
- * @returns {{ cols: number, rows: number }}
- */
-export function getGridForRows(rows) {
-  return { cols: GRID_COLS, rows };
-}
 
 /** Watts per second produced by a single panel before any mount bonus. */
 export const PANEL_BASE_W = 1;
@@ -78,12 +68,10 @@ export function cellsFor(type, col, row) {
  * @param {string} type
  * @param {number} col
  * @param {number} row
- * @param {number} [gridRows] — player's current grid rows (default: GRID_DEFAULT_ROWS)
  */
-export function withinGrid(type, col, row, gridRows = GRID_DEFAULT_ROWS) {
-  const grid = getGridForRows(gridRows);
+export function withinGrid(type, col, row) {
   return cellsFor(type, col, row).every(
-    (cell) => cell.col >= 0 && cell.col < grid.cols && cell.row >= 0 && cell.row < grid.rows
+    (cell) => cell.col >= 0 && cell.col < GRID.cols && cell.row >= 0 && cell.row < GRID.rows
   );
 }
 
@@ -97,18 +85,10 @@ export function panelOutput(type) {
 /**
  * Serialisable view of the rules, sent to the client so the UI can show bays
  * and bonuses without hardcoding a second source of truth for them.
- *
- * `gridRows` must be the player's own row count. This used to always emit the
- * default `GRID`, so a player who had bought an expansion was told their farm
- * was still four rows tall — the server validated layouts against the real
- * number while describing a smaller one, and the extra rows could never be
- * drawn.
- *
- * @param {number} [gridRows] rows the player currently owns
  */
-export function publicConfig(gridRows = GRID_DEFAULT_ROWS) {
+export function publicConfig() {
   return {
-    grid: getGridForRows(gridRows),
+    grid: { ...GRID },
     panelBaseW: PANEL_BASE_W,
     mounts: Object.fromEntries(
       Object.entries(MOUNT_TYPES).map(([id, def]) => [

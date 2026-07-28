@@ -8,7 +8,7 @@ English only, everywhere — copy, code, commits, docs. See
 | Route | Page | Notes |
 |---|---|---|
 | `/` | Farm | The game. Phaser canvas plus the power and payout panels |
-| `/shop` | Shop | Buy catalogue (`pages/MyAssets.jsx`). Four shelves: Promotions, Generators, Supports, Expansion |
+| `/shop` | Shop | Buy catalogue (`pages/MyAssets.jsx`). Three shelves: Promotions, Generators, Supports |
 | `/minigames` | Minigames | 3 game cards: Solar Swipe, Wind Clicker, Hydro Race |
 | `/wallet` | Wallet | Mining payout history + minigame activity summary |
 | `/profile` | Profile | Account details, nickname, password, avatar picker |
@@ -84,21 +84,22 @@ diminishing returns as the farm grows. Solar's budget is 50 VLT per cycle; the
 wind and hydro budgets are not paid out while those networks are dormant.
 
 ## Grid
-14 columns × 4 rows by default, expandable one row at a time to 8 via
-`POST /api/assets/expand-grid` at `50000 × 4^(rows - 4)` VLT.
+A fixed 14 × 4, defined once in `config/mounts.js` and validated on every layout
+write. The client mirrors the *visual* half of those rules in `FarmScene`.
 
-The row count is stored per player (`User.gridRows`), validated on every layout
-write, and reported to the client in the `config` of `GET /api/farm/layout` —
-which is what lets `FarmScene` draw a farm bigger than the default.
+The size is not arbitrary: the tile is 64px because that is what the artwork was
+drawn on, and four 64px rows from y=344 exactly fill the grass band in
+`background-game.png` between the horizon and the toolbar line.
 
-The grid is anchored to the toolbar line and grows **upwards**, so an expansion
-adds a row at the far edge instead of shifting the rows already built. Because
-four 64px rows exactly fill the grass band in `background-game.png`, a taller
-grid needs more grass than the default fit shows: `FarmScene.layoutBackground`
-scales the background up and slides it down so the horizon always meets the top
-row. The trade is sky — at 8 rows only ~88px of it remains. The alternative was
-shrinking the tile, and downscaling 64px pixel art by a fractional factor
-destroys it.
+**Grid expansion was removed.** A purchasable row (to a maximum of 8, at
+`50000 × 4^(rows - 4)` VLT) existed on the server and was briefly wired to the
+Shop. It is gone: the routes, the `User.gridRows` column, the per-player config
+plumbing and the UI. The blocker was visual — eight rows need 512px of grass and
+the background provides ~292px at canvas size, so the only ways forward were
+adapting the background (which crops the sun and clouds out) or shrinking the
+tile (which destroys 64px pixel art at fractional scale). Neither was worth it
+for an endgame sink. `LedgerEntry` rows with kind `grid-expansion` are retained
+as audit history.
 
 ## Cooldown tiers (minigames)
 | Plays today | Tier | Cooldown |
