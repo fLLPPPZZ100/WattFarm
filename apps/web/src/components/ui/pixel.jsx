@@ -91,6 +91,40 @@ export const ArrowLeftIcon = (props) => (
   </PixelIcon>
 );
 
+/**
+ * Failure mark. Distinct from `AlertIcon` on purpose: the notification system
+ * shows errors and warnings side by side, and telling them apart by colour
+ * alone fails for the ~8% of players with a red/green deficiency.
+ */
+export const CrossIcon = (props) => (
+  <PixelIcon {...props}>
+    <path d="M3 3l6 6M9 3l-6 6" />
+  </PixelIcon>
+);
+
+export const InfoIcon = (props) => (
+  <PixelIcon {...props}>
+    <circle cx="6" cy="6" r="4.5" />
+    <path d="M6 5.5v3M6 3.5h.01" />
+  </PixelIcon>
+);
+
+/** Dismiss glyph, drawn lighter than `CrossIcon` so it reads as a control. */
+export const CloseIcon = ({ className = 'w-3 h-3' }) => (
+  <svg
+    viewBox="0 0 12 12"
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="square"
+    shapeRendering="crispEdges"
+    aria-hidden="true"
+  >
+    <path d="M3.5 3.5l5 5M8.5 3.5l-5 5" />
+  </svg>
+);
+
 export const GoogleIcon = ({ className = 'w-4 h-4' }) => (
   // Kept as the official multi-colour mark: Google brand guidelines require
   // the unmodified logo, so this one is not pixel-styled.

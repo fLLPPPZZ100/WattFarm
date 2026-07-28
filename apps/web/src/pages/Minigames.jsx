@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../lib/apiClient.js';
 import { friendlyAuthError } from '../lib/authErrors.js';
+import { notify } from '../lib/notify.js';
 
 const GAME_INFO = {
   'solar-swipe': {
@@ -27,7 +28,6 @@ export default function Minigames() {
   const [games, setGames] = useState([]);
   const [playing, setPlaying] = useState(null);
   const [result, setResult] = useState(null);
-  const [error, setError] = useState('');
   const pollingRef = useRef(null);
 
   // RequireAuth guarantees a provisioned session before this page mounts.
@@ -48,9 +48,11 @@ export default function Minigames() {
   }, [fetchStatus]);
 
   const handlePlay = async (game) => {
-    setError('');
+    const label = GAME_INFO[game]?.label || game;
+
     setResult(null);
     setPlaying(game);
+
     try {
       const data = await api.post(`/api/minigames/${encodeURIComponent(game)}/play`);
       setResult({
@@ -59,11 +61,31 @@ export default function Minigames() {
         vltEarned: data.vltEarned,
         newBalance: data.newBalance,
       });
+
+      // The banner below keeps the numbers on screen; the notification is what
+      // tells the player the play resolved, wherever they happen to be looking.
+      if (data.result === 'none') {
+        notify.info(label, 'No prize this time. Try again after the cooldown.');
+      } else {
+        // Guarded: throwing here would land in the catch below and report a win
+        // as a failure.
+        const balance =
+          typeof data.newBalance === 'number'
+            ? ` New balance: ${data.newBalance.toFixed(1)} VLT.`
+            : '';
+
+        notify.success(`${label} — ${data.result} win`, `Earned ${data.vltEarned} VLT.${balance}`);
+      }
+
       fetchStatus(); // refresh cooldowns immediately
     } catch (err) {
-      // Surfaces the email-verification gate and rate limits with a readable
-      // message rather than a raw status code.
-      setError(friendlyAuthError(err));
+      /**
+       * The email-verification gate, the cooldown and the rate limiter all land
+       * here. This used to render a banner that the next play silently cleared;
+       * a notification is a better fit for a message with a lifespan, and
+       * `friendlyAuthError` still does the translating.
+       */
+      notify.error(`Could not play ${label}`, friendlyAuthError(err));
     } finally {
       setPlaying(null);
     }
@@ -87,12 +109,7 @@ export default function Minigames() {
         </p>
       </div>
 
-      {/* Error / Result banner */}
-      {error && (
-        <div className="p-4 rounded bg-red-900/30 border border-red-800 text-sm text-red-300">
-          {error}
-        </div>
-      )}
+      {/* Last result. Failures are reported as notifications instead. */}
       {result && (
         <div
           className={`p-4 rounded border text-sm ${

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/apiClient.js';
 import { buildReferralLink } from '../lib/referral.js';
+import { notify } from '../lib/notify.js';
 import vltCoinImg from '../assets/coins/vlt-coin.png';
 
 /** Formats a VLT amount for display. */
@@ -35,34 +36,35 @@ const KIND_LABELS = {
  * is the case on plain HTTP origins and in some in-app browsers — exactly the
  * environments an invite link is likely to be opened in.
  */
-function CopyButton({ value, label }) {
+function CopyButton({ value, label, what }) {
   const [copied, setCopied] = useState(false);
-  const [failed, setFailed] = useState(false);
 
   const handleCopy = useCallback(async () => {
-    setFailed(false);
     try {
       if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
       await navigator.clipboard.writeText(value);
+
+      // The button's own label still confirms it, for anyone watching the cursor
+      // rather than the corner of the screen.
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+
+      notify.success(`${what} copied`, 'Anyone who signs up through it is attributed to you.');
     } catch {
-      setFailed(true);
+      notify.error(
+        'Copy failed',
+        'Your browser blocked clipboard access. Select the text and copy it manually.'
+      );
     }
-  }, [value]);
+  }, [value, what]);
 
   return (
-    <div className="flex flex-col items-end gap-1">
-      <button
-        onClick={handleCopy}
-        className="bg-accent-watt text-bg-abyss font-semibold px-4 py-2 rounded text-sm hover:brightness-110 transition-all whitespace-nowrap"
-      >
-        {copied ? 'Copied' : label}
-      </button>
-      {failed && (
-        <span className="text-red-400/80 text-[11px]">Copy failed — select the text manually</span>
-      )}
-    </div>
+    <button
+      onClick={handleCopy}
+      className="bg-accent-watt text-bg-abyss font-semibold px-4 py-2 rounded text-sm hover:brightness-110 transition-all whitespace-nowrap"
+    >
+      {copied ? 'Copied' : label}
+    </button>
   );
 }
 
@@ -182,7 +184,7 @@ export default function Referrals() {
             </p>
           </div>
           <div className="pt-4">
-            <CopyButton value={link} label="Copy link" />
+            <CopyButton value={link} label="Copy link" what="Invite link" />
           </div>
         </div>
 
@@ -194,7 +196,7 @@ export default function Referrals() {
             </p>
           </div>
           <div className="pt-4">
-            <CopyButton value={data.referralCode} label="Copy code" />
+            <CopyButton value={data.referralCode} label="Copy code" what="Invite code" />
           </div>
         </div>
 

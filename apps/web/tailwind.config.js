@@ -94,6 +94,27 @@ export default {
           '0%, 100%': { opacity: '0.15' },
           '50%': { opacity: '0.8' },
         },
+        /* ── Notifications ────────────────────────────────────────────
+           The stack sits against the left edge of the content area, so a
+           notification enters and leaves along that edge rather than dropping
+           in from above. The offset is small (16px) because the stack is only
+           16px from the edge and a longer travel would be clipped by the
+           content area's overflow. */
+        'toast-in': {
+          '0%': { opacity: '0', transform: 'translateX(-16px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+        'toast-out': {
+          '0%': { opacity: '1', transform: 'translateX(0)' },
+          '100%': { opacity: '0', transform: 'translateX(-16px)' },
+        },
+        /* Time remaining. `scaleX` rather than `width` so the browser can keep
+           the bar on the compositor: five of these animating at once must not
+           trigger layout. */
+        'toast-drain': {
+          '0%': { transform: 'scaleX(1)' },
+          '100%': { transform: 'scaleX(0)' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 180ms ease-out both',
@@ -105,6 +126,24 @@ export default {
         blink: 'blink 1.1s steps(1, end) infinite',
         'bar-sweep': 'bar-sweep 1.1s steps(8, end) infinite',
         twinkle: 'twinkle 3s ease-in-out infinite',
+        /**
+         * Stepped like the rest of the interface, but with enough steps
+         * (~27ms each) that the slide still reads as smooth rather than
+         * juddering — the notification is not a button press, so it should not
+         * snap.
+         */
+        'toast-in': 'toast-in 220ms steps(8, end) both',
+        'toast-out': 'toast-out 180ms steps(6, end) both',
+        /**
+         * The duration here is only the default. `NotificationStack` overrides
+         * it per card with an inline `animation-duration: var(--toast-duration)`,
+         * because each notification may specify its own lifetime.
+         *
+         * The variable is deliberately not written into this shorthand: Tailwind
+         * parses the value to work out which keyframes to emit, and feeding it a
+         * `var()` in the duration slot relies on that parser being lenient.
+         */
+        'toast-drain': 'toast-drain 4000ms steps(40, end) both',
       },
     },
   },
