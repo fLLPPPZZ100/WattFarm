@@ -16,6 +16,7 @@ import trxCoinImg from '../../assets/coins/trx-coin.png';
 import ethCoinImg from '../../assets/coins/eth-coin.png';
 import solCoinImg from '../../assets/coins/sol-coin.png';
 import { getAvatarImage } from '../../data/avatars.js';
+import profileImg from '../../assets/sprites/profile.png';
 
 
 const NAV_LINKS = [
@@ -324,7 +325,7 @@ export default function AppShell() {
                         onClick={function () { goFromAccountMenu('/profile'); }}
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:text-text-primary hover:bg-bg-abyss/50 transition-colors"
                       >
-                        <span className="text-base w-5 text-center">👤</span>
+                        <img src={profileImg} alt="" className="w-5 h-5 object-contain" style={{ imageRendering: 'pixelated' }} />
                         <span>Profile</span>
                       </button>
 
