@@ -66,12 +66,38 @@ var CATEGORIES = [
 var DEFAULT_COLOR = '#2A3B4D';
 
 var PROMOTIONS = [
-  { id: 'starter-pack', label: 'Starter Pack', description: '1 Solar Panel + 50 VLT bonus', price: 25, originalPrice: 35, color: '#F2B84B', img: solarPanelImg },
+  {
+    id: 'starter-pack',
+    label: 'Starter Pack',
+    description: '1 Solar Panel + 50 VLT bonus',
+    benefit: '1 PANEL + 50 VLT',
+    price: 25,
+    originalPrice: 35,
+    color: '#F2B84B',
+    img: solarPanelImg,
+  },
 ];
 
 var SUPPORTS = [
-  { id: 'panel-mount', label: 'Single Mount', description: 'Ground mount for 1 solar panel', price: 15, color: '#8B7355', img: mount1Img },
-  { id: 'panel-mount-double', label: 'Double Mount', description: 'Ground mount for 2 solar panels', price: 25, color: '#8B7355', img: mount2Img },
+  {
+    id: 'panel-mount',
+    label: 'Single Mount',
+    description: 'Ground mount for 1 solar panel',
+    benefit: '1 PANEL SLOT',
+    price: 15,
+    color: '#8B7355',
+    img: mount1Img,
+  },
+  {
+    id: 'panel-mount-double',
+    label: 'Double Mount',
+    description: 'Ground mount for 2 solar panels',
+    benefit: '2 PANEL SLOTS',
+    benefitNote: '+25% panel output',
+    price: 25,
+    color: '#8B7355',
+    img: mount2Img,
+  },
 ];
 
 var GENERATOR_META = {
@@ -107,20 +133,21 @@ function itemLabel(id) {
 }
 
 /* ── Quantity stepper ───────────────────────────────────────────────
-   Presentation only. Every mutation still routes through clampQty and the
-   same setQty, so the bounds behave exactly as before. */
+   Presentation only. It looks like a game control rather than an HTML form,
+   but keeps the editable input and every mutation still routes through the
+   same clampQty/setQty path. */
 function QtyStepper({ qty, setQty }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex items-center gap-1 rounded-xl border border-line-dusk bg-bg-abyss/70 p-1">
+    <div className="flex items-center gap-2" aria-label="Purchase quantity">
+      <div className="flex flex-1 items-center rounded-lg border-2 border-line-dusk bg-[#09131e] p-1 shadow-pixel-inset">
         <button
           type="button"
           onClick={function () { setQty(clampQty(qty - 1)); }}
           disabled={qty <= 1}
           aria-label="Decrease quantity"
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-xl font-bold leading-none text-text-muted
-                     transition-all hover:bg-bg-panel hover:text-accent-watt active:scale-90
-                     disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-text-muted"
+          className="flex h-10 w-11 items-center justify-center border-r border-line-dusk text-xl font-bold leading-none text-text-muted
+                     transition-all duration-150 hover:bg-bg-panel hover:text-accent-watt active:scale-90
+                     disabled:cursor-not-allowed disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-text-muted"
         >−</button>
         <input
           type="text"
@@ -134,25 +161,27 @@ function QtyStepper({ qty, setQty }) {
             if (!isNaN(v)) setQty(clampQty(v));
           }}
           aria-label="Quantity"
-          className="h-9 w-12 bg-transparent text-center font-mono text-lg font-semibold text-text-primary outline-none
-                     [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          className="h-10 min-w-0 flex-1 bg-transparent text-center font-mono text-xl font-bold text-text-primary outline-none
+                     transition-colors focus:text-accent-watt [appearance:textfield]
+                     [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
         <button
           type="button"
           onClick={function () { setQty(clampQty(qty + 1)); }}
           disabled={qty >= MAX_QTY}
           aria-label="Increase quantity"
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-xl font-bold leading-none text-text-muted
-                     transition-all hover:bg-bg-panel hover:text-accent-watt active:scale-90
-                     disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-text-muted"
+          className="flex h-10 w-11 items-center justify-center border-l border-line-dusk text-xl font-bold leading-none text-text-muted
+                     transition-all duration-150 hover:bg-bg-panel hover:text-accent-watt active:scale-90
+                     disabled:cursor-not-allowed disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-text-muted"
         >+</button>
       </div>
 
       <button
         type="button"
         onClick={function () { setQty(MAX_QTY); }}
-        className="rounded-lg border border-accent-watt/30 bg-accent-watt/10 px-3.5 py-2 font-display text-[11px] uppercase tracking-wide text-accent-watt
-                   transition-all hover:-translate-y-0.5 hover:border-accent-watt/60 hover:bg-accent-watt/20 active:translate-y-0"
+        className="h-[52px] rounded-lg border-2 border-accent-watt/40 bg-accent-watt/10 px-4 font-display text-xs uppercase tracking-wide text-accent-watt
+                   shadow-pixel-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-accent-watt hover:bg-accent-watt/20
+                   active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
       >
         Max
       </button>
@@ -170,17 +199,21 @@ function BuyButton({ enabled, loading, label, onClick }) {
       onClick={onClick}
       disabled={!enabled || loading}
       className={
-        'mt-1 w-full rounded-xl py-3.5 font-display text-sm uppercase tracking-wide transition-all duration-150 ' +
+        'relative mt-1 w-full overflow-hidden rounded-lg border-2 py-4 font-display text-sm uppercase tracking-[0.08em] transition-all duration-150 ' +
         (enabled
-          ? 'bg-gradient-to-b from-[#F7D089] to-[#F2B84B] text-bg-abyss ' +
-            'shadow-[0_5px_0_0_#A97F24,0_10px_18px_-6px_rgba(242,184,75,0.45)] ' +
-            'hover:-translate-y-0.5 hover:brightness-105 ' +
-            'hover:shadow-[0_6px_0_0_#A97F24,0_14px_24px_-6px_rgba(242,184,75,0.55)] ' +
-            'active:translate-y-1 active:shadow-[0_2px_0_0_#A97F24]'
-          : 'cursor-not-allowed bg-[#212c3a] text-[#5b6a7d]')
+          ? 'border-[#F7D089] bg-gradient-to-b from-[#F8D793] to-[#F2B84B] text-bg-abyss ' +
+            'shadow-[0_5px_0_0_#8A6A2B,0_12px_24px_-8px_rgba(242,184,75,0.5)] ' +
+            'hover:-translate-y-0.5 hover:brightness-110 hover:scale-[1.01] ' +
+            'hover:shadow-[0_6px_0_0_#8A6A2B,0_16px_28px_-8px_rgba(242,184,75,0.6)] ' +
+            'active:translate-y-1 active:scale-[0.99] active:shadow-[0_1px_0_0_#8A6A2B]'
+          : 'cursor-not-allowed border-line-dusk bg-[#1b2735] text-[#5b6a7d] shadow-none')
       }
     >
-      {loading ? 'Buying…' : label}
+      {enabled && !loading && (
+        <span className="pointer-events-none absolute inset-y-0 -left-12 w-8 -skew-x-12 bg-white/25 opacity-0 blur-sm
+                         transition-all duration-500 group-hover:left-[110%] group-hover:opacity-100" />
+      )}
+      <span className="relative">{loading ? 'Buying…' : label}</span>
     </button>
   );
 }
@@ -208,151 +241,147 @@ function ShopCard({ item, color, img, owned, isPromo, isGenerator, isSupport, vl
   insufficient = totalPrice > 0 && totalPrice > vltBalance;
 
   var accent = accentFor({ isPromo: isPromo, isGenerator: isGenerator });
+  var displayPrice = showPurchaseSystem ? totalPrice : item.price;
+  // Promotions are informational placeholders today and do not call the buy
+  // endpoint, so only real purchases should turn the price red for low funds.
+  var priceInsufficient = showPurchaseSystem && insufficient;
 
   return (
-    <div
+    <article
       className={
-        'group relative flex flex-col gap-4 rounded-2xl border p-6 transition-all duration-200 ease-out ' +
-        'border-line-dusk/70 shadow-[0_6px_20px_-8px_rgba(0,0,0,0.65)] ' +
-        'bg-gradient-to-b ' + (isPromo ? 'from-[#2a2417] to-[#121a27]' : 'from-[#1b2c43] to-[#0e1b2a]') + ' ' +
-        'hover:-translate-y-1 hover:scale-[1.015] ' +
-        'hover:border-[color:var(--card-border)] hover:shadow-[0_16px_38px_-12px_var(--card-glow)]'
+        'group relative flex h-full flex-col overflow-hidden rounded-xl border-2 border-line-dusk bg-[#101d2b] ' +
+        'shadow-[6px_7px_0_#07101a,0_18px_32px_-20px_rgba(0,0,0,0.9)] ' +
+        'transition-all duration-200 ease-out hover:-translate-y-1 hover:border-[color:var(--card-border)] ' +
+        'hover:shadow-[6px_9px_0_#07101a,0_24px_42px_-18px_var(--card-glow)]'
       }
-      style={{ '--card-glow': withAlpha(accent, 0.3), '--card-border': withAlpha(accent, 0.55) }}
+      style={{ '--card-glow': withAlpha(accent, 0.38), '--card-border': withAlpha(accent, 0.68) }}
     >
-      {/* Sale badge */}
+      {/* Category-coloured edge: a game-item frame, not a generic form card. */}
+      <div className="h-1.5 w-full shrink-0" style={{ background: accent, boxShadow: '0 0 14px ' + withAlpha(accent, 0.6) }} />
+
       {isPromo && (
-        <span className="absolute -top-2.5 right-4 z-10 rounded-full bg-gradient-to-r from-[#F5923B] to-[#F2B84B]
-                         px-2.5 py-0.5 font-display text-[10px] uppercase tracking-wider text-bg-abyss
-                         shadow-[0_2px_10px_rgba(245,146,59,0.55)]">
-          Sale
+        <span className="absolute right-3 top-3 z-20 border border-[#ffc06e] bg-[#d86b28] px-2.5 py-1
+                         font-display text-[10px] uppercase tracking-wider text-white shadow-pixel-sm">
+          Soon
         </span>
       )}
 
-      {/* Inventory count — uses the owned prop already passed in; no new data. */}
       {showPurchaseSystem && owned > 0 && (
-        <span className="absolute left-3 top-3 z-10 rounded-md border border-line-dusk bg-bg-abyss/85 px-2 py-0.5
-                         font-mono text-[10px] text-text-muted backdrop-blur-sm">
+        <span
+          aria-label={`${owned} owned`}
+          className="absolute left-3 top-3 z-20 border border-line-dusk bg-bg-abyss/90 px-2 py-1
+                     font-mono text-[10px] text-text-muted shadow-pixel-sm backdrop-blur-sm"
+        >
           ×{owned} owned
         </span>
       )}
 
-      {/* ── Product image: enlarged, lit from within ── */}
+      {/* Product first: oversized art on its own lit stage. */}
       <div
-        className="relative flex h-[172px] w-full items-center justify-center overflow-hidden rounded-xl border border-white/5"
+        className="relative mx-3 mt-3 flex h-[190px] items-center justify-center overflow-hidden border border-white/5"
         style={{
           background:
-            'radial-gradient(circle at 50% 42%, ' + withAlpha(accent, 0.2) + ', rgba(11,22,34,0) 70%), ' +
-            'linear-gradient(180deg, #16273d 0%, #0d1a29 100%)',
+            'radial-gradient(circle at 50% 38%, ' + withAlpha(accent, 0.25) + ', rgba(11,22,34,0) 62%), ' +
+            'linear-gradient(180deg, #1a3048 0%, #0b1724 100%)',
         }}
       >
-        {/* Soft floor glow under the item. */}
+        <div className="pointer-events-none absolute inset-0 opacity-25 pixel-grid" aria-hidden="true" />
         <div
-          className="pointer-events-none absolute inset-x-8 bottom-4 h-6 rounded-full blur-md"
-          style={{ background: withAlpha(accent, 0.28) }}
+          className="pointer-events-none absolute bottom-4 h-7 w-2/3 rounded-full blur-lg"
+          style={{ background: withAlpha(accent, 0.35) }}
           aria-hidden="true"
         />
         {img ? (
           <img
             src={img}
             alt={item.label}
-            className="relative max-h-[136px] object-contain drop-shadow-[0_8px_12px_rgba(0,0,0,0.5)]
-                       transition-transform duration-300 ease-out group-hover:scale-110"
+            className="relative max-h-[154px] max-w-[88%] object-contain drop-shadow-[0_10px_12px_rgba(0,0,0,0.58)]
+                       transition-transform duration-300 ease-out group-hover:scale-[1.09] group-hover:-translate-y-1"
             style={{ imageRendering: 'pixelated' }}
           />
         ) : (
-          <span className="font-display text-4xl opacity-40" style={{ color: safeColor }}>
+          <span className="font-display text-4xl opacity-50" style={{ color: safeColor }}>
             {(item.label || item.type || '').slice(0, 2).toUpperCase()}
           </span>
         )}
       </div>
 
-      {/* ── Title + headline stat ── */}
-      <div className="flex flex-col gap-2">
-        <p className="text-heading-md text-text-primary">{item.label || item.type}</p>
-
-        {/* Power is the hero of a generator card: value only, big, glowing yellow. */}
-        {isGenerator && powerW > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xl leading-none" aria-hidden="true">⚡</span>
-            <span className="font-mono text-2xl font-bold text-accent-watt drop-shadow-[0_0_10px_rgba(242,184,75,0.4)]">
-              +{powerW.toFixed(1)} W/s
-            </span>
-          </div>
-        )}
-
-        {/* Supports and promos have no output; their line is the description. */}
-        {!isGenerator && item.description && (
-          <p className="text-body-sm text-text-muted leading-snug">{item.description}</p>
-        )}
-      </div>
-
-      {/* ── Promotions: price only (no quantity system) ── */}
-      {!showPurchaseSystem && (
-        <div className="flex items-center gap-2">
-          <img
-            src={vltCoinImg}
-            alt="VLT"
-            width="22"
-            height="22"
-            style={{ imageRendering: 'pixelated', filter: 'drop-shadow(0 0 5px rgba(242,184,75,0.5))' }}
-          />
-          <span className="font-mono text-2xl font-bold text-accent-watt">{fmtPrice(item.price)}</span>
-          <span className="font-display text-xs uppercase tracking-wide text-accent-watt/80">VLT</span>
-          {isPromo && item.originalPrice ? (
-            <span className="ml-1 font-mono text-sm text-text-muted line-through">{fmtPrice(item.originalPrice)}</span>
-          ) : null}
+      <div className="flex flex-1 flex-col gap-4 p-5 pt-4">
+        {/* Name second. */}
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="text-heading-lg text-text-primary">{item.label || item.type}</h3>
         </div>
-      )}
 
-      {/* ── Generators & supports: quantity → total → buy ── */}
-      {showPurchaseSystem && (
-        <>
-          <QtyStepper qty={qty} setQty={setQty} />
+        {/* Benefit third. One glance answers why this upgrade matters. */}
+        <div
+          className="flex min-h-[62px] items-center gap-3 border-l-4 px-3 py-2.5"
+          style={{ borderColor: accent, background: withAlpha(accent, 0.09) }}
+        >
+          <span className="text-2xl leading-none" aria-hidden="true">
+            {isGenerator ? '⚡' : isPromo ? '✦' : '▣'}
+          </span>
+          <div className="min-w-0">
+            {isGenerator && powerW > 0 ? (
+              <span className="block font-mono text-[28px] font-bold leading-none text-accent-watt drop-shadow-[0_0_10px_rgba(242,184,75,0.45)]">
+                +{powerW.toFixed(1)} W/s
+              </span>
+            ) : (
+              <span className="block font-display text-lg font-semibold leading-tight" style={{ color: accent }}>
+                {item.benefit}
+              </span>
+            )}
+            {item.benefitNote && (
+              <span className="mt-1 block text-[11px] font-semibold text-accent-current">{item.benefitNote}</span>
+            )}
+          </div>
+        </div>
 
-          {/* Total, the number the eye lands on before the button. */}
-          <div className="flex items-end justify-between rounded-xl border border-line-dusk/70 bg-bg-abyss/50 px-3.5 py-2.5">
-            <div className="flex flex-col">
-              <span className="text-label text-text-muted">Total</span>
-              <span className="font-mono text-[11px] text-text-muted">Unit {fmtPrice(unitPrice)} VLT</span>
-            </div>
-            <div className={'flex items-center gap-1.5 ' + (insufficient ? 'text-danger-crt' : 'text-accent-watt')}>
-              <img
-                src={vltCoinImg}
-                alt="VLT"
-                width="20"
-                height="20"
-                className="inline-block"
-                style={
-                  insufficient
-                    ? { imageRendering: 'pixelated', filter: 'grayscale(0.5) sepia(1) hue-rotate(-30deg) saturate(4) brightness(0.9)' }
-                    : { imageRendering: 'pixelated', filter: 'drop-shadow(0 0 5px rgba(242,184,75,0.45))' }
-                }
-              />
-              <span className="font-mono text-xl font-bold">{fmtPrice(totalPrice)}</span>
-              <span className="font-display text-xs uppercase tracking-wide opacity-80">VLT</span>
-            </div>
+        {/* Purchase dock: quantity → price → BUY. No form-like labels. */}
+        <div className="mt-auto flex flex-col gap-3 border-t border-line-dusk/70 pt-4">
+          {showPurchaseSystem && <QtyStepper qty={qty} setQty={setQty} />}
+
+          <div className="flex min-h-[45px] items-center justify-center gap-2">
+            {showPurchaseSystem && <span className="mr-1 text-label text-text-muted">Total</span>}
+            <img
+              src={vltCoinImg}
+              alt="VLT"
+              width="26"
+              height="26"
+              style={
+                priceInsufficient
+                  ? { imageRendering: 'pixelated', filter: 'grayscale(0.5) sepia(1) hue-rotate(-30deg) saturate(4) brightness(0.9)' }
+                  : { imageRendering: 'pixelated', filter: 'drop-shadow(0 0 7px rgba(242,184,75,0.55))' }
+              }
+            />
+            <span className={'font-mono text-[26px] font-bold ' + (priceInsufficient ? 'text-danger-crt' : 'text-accent-watt')}>
+              {fmtPrice(displayPrice)}
+            </span>
+            <span className={'font-display text-sm uppercase tracking-wide ' + (priceInsufficient ? 'text-danger-crt/80' : 'text-accent-watt/80')}>
+              VLT
+            </span>
+            {isPromo && item.originalPrice ? (
+              <span className="ml-1 font-mono text-sm text-text-muted line-through">{fmtPrice(item.originalPrice)}</span>
+            ) : null}
           </div>
 
-          <BuyButton
-            enabled={canBuy}
-            loading={loading}
-            label="Buy"
-            onClick={function () { onBuy(item.id || item.type, clampQty(qty)); }}
-          />
-        </>
-      )}
-
-      {/* ── Promotions: buy action (no quantity) ── */}
-      {!showPurchaseSystem && (
-        <BuyButton
-          enabled={!loading}
-          loading={loading}
-          label={'Buy · ' + fmtPrice(unitPrice) + ' VLT'}
-          onClick={function () { onBuy(item.id || item.type, 1); }}
-        />
-      )}
-    </div>
+          {showPurchaseSystem ? (
+            <BuyButton
+              enabled={canBuy}
+              loading={loading}
+              label="Buy"
+              onClick={function () { onBuy(item.id || item.type, clampQty(qty)); }}
+            />
+          ) : (
+            <BuyButton
+              enabled={!loading}
+              loading={loading}
+              label="Coming Soon"
+              onClick={function () { onBuy(item.id || item.type, 1); }}
+            />
+          )}
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -435,119 +464,144 @@ export default function Shop() {
   var sectionAccent = activeCategory === 'promotions' ? '#F5923B' : activeCategory === 'supports' ? '#6FB7D6' : '#F2B84B';
 
   return (
-    <div className="relative">
-      {/* Soft warm glow behind the grid — depth without leaving the dark theme. */}
+    <div className="relative pb-10">
+      {/* Layered ambient light: enough depth to feel like a shop room, never a dashboard panel. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -top-8 left-1/2 h-72 w-[70%] -translate-x-1/2 rounded-full blur-3xl"
-        style={{ background: 'radial-gradient(circle, rgba(242,184,75,0.07), rgba(11,22,34,0) 70%)' }}
+        className="pointer-events-none absolute -left-20 -top-24 h-96 w-96 rounded-full blur-3xl"
+        style={{ background: 'radial-gradient(circle, rgba(242,184,75,0.08), rgba(11,22,34,0) 68%)' }}
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-20 top-20 h-80 w-80 rounded-full blur-3xl"
+        style={{ background: 'radial-gradient(circle, rgba(95,212,196,0.045), rgba(11,22,34,0) 70%)' }}
       />
 
-      {/* Page header */}
-      <div className="relative mb-6">
-        <h1 className="text-heading-xl text-accent-watt">SHOP</h1>
-        <p className="text-body-sm text-text-muted mt-1">
-          Spend VLT on panels, mounts and limited deals.
-        </p>
-      </div>
-
-      <div className="relative flex gap-6">
-        {/* Categories sidebar */}
-        <aside className="w-52 shrink-0 space-y-1.5">
-          {CATEGORIES.map(function (cat) {
-            var isActive = activeCategory === cat.key;
-            var catAccent = cat.key === 'promotions' ? '#F5923B' : cat.key === 'supports' ? '#6FB7D6' : '#F2B84B';
-            return (
-              <button
-                key={cat.key}
-                onClick={function () { setActiveCategory(cat.key); }}
-                className={
-                  'group relative w-full overflow-hidden flex items-center gap-3 rounded-xl border px-3.5 py-3 text-sm transition-all duration-200 ' +
-                  (isActive
-                    ? 'border-line-dusk bg-bg-panel font-semibold text-text-primary shadow-[0_4px_16px_-6px_rgba(0,0,0,0.7)]'
-                    : 'border-transparent text-text-muted hover:translate-x-0.5 hover:bg-bg-panel/50 hover:text-text-primary')
-                }
-              >
-                {/* Active accent rail. */}
-                {isActive && (
-                  <span
-                    className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full"
-                    style={{ background: catAccent, boxShadow: '0 0 10px ' + withAlpha(catAccent, 0.75) }}
-                    aria-hidden="true"
-                  />
-                )}
-                <span
-                  className="grid h-8 w-8 place-items-center rounded-lg text-base transition-colors"
-                  style={isActive ? { background: withAlpha(catAccent, 0.16), color: catAccent } : undefined}
-                >
-                  {cat.icon}
-                </span>
-                <span>{cat.label}</span>
-                {isActive && (
-                  <span className="ml-auto h-1.5 w-1.5 rounded-full" style={{ background: catAccent }} aria-hidden="true" />
-                )}
-              </button>
-            );
-          })}
-        </aside>
-
-        {/* Content — keyed on the category so switching replays a soft fade. */}
-        <div className="flex-1 min-w-0">
-          {/* GENERATORS */}
-          {activeCategory === 'generators' && (
-            <section key="generators" className="animate-fade-in">
-              <h2 className="text-heading-lg mb-4" style={{ color: sectionAccent }}>⚡ GENERATORS</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {genCatalog.map(function (item) {
-                  var meta = GENERATOR_META[item.type] || {};
-                  return (
-                    <ShopCard key={item.type}
-                      item={{ ...item, label: meta.label, description: '+' + (meta.baseW || item.baseW || 0) + ' W/s production' }}
-                      color={meta.color} img={meta.img}
-                      owned={ownedMap[item.type] || 0} isGenerator vltBalance={vltBalance} onBuy={handleBuy} loading={loading} />
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
-          {/* PROMOTIONS */}
-          {activeCategory === 'promotions' && (
-            <section key="promotions" className="animate-fade-in">
-              <h2 className="text-heading-lg mb-4" style={{ color: sectionAccent }}>🔥 PROMOTIONS</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {PROMOTIONS.map(function (item) {
-                  return (
-                    <ShopCard key={item.id} item={item} color={item.color} img={item.img}
-                      owned={0} isPromo vltBalance={vltBalance} loading={false}
-                      onBuy={function () {
-                        // Bundles are not implemented server-side yet. A blocking
-                        // window.alert for that is heavy-handed; this is the same
-                        // information without stopping the page.
-                        notify.info(item.label, 'Bundles are not available yet — coming soon.');
-                      }} />
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
-          {/* SUPPORTS */}
-          {activeCategory === 'supports' && (
-            <section key="supports" className="animate-fade-in">
-              <h2 className="text-heading-lg mb-4" style={{ color: sectionAccent }}>🔧 SUPPORTS</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {SUPPORTS.map(function (item) {
-                  return (
-                    <ShopCard key={item.id} item={item} color={item.color} img={item.img}
-                      owned={ownedMap[item.id] || 0} isSupport vltBalance={vltBalance} onBuy={handleBuy} loading={loading} />
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
+      {/* Shop masthead: identity on the left, buying power on the right. */}
+      <header className="relative mb-5 flex items-center justify-between gap-4 border-b border-line-dusk pb-5">
+        <div>
+          <h1 className="text-heading-xl text-accent-watt">SHOP</h1>
+          <p className="text-body-sm mt-1 text-text-muted">Turn VLT into a stronger farm.</p>
         </div>
+        <div className="flex items-center gap-2 border-2 border-line-dusk bg-bg-panel px-3 py-2 shadow-pixel-sm">
+          <img
+            src={vltCoinImg}
+            alt=""
+            width="26"
+            height="26"
+            style={{ imageRendering: 'pixelated', filter: 'drop-shadow(0 0 6px rgba(242,184,75,0.5))' }}
+          />
+          <div className="text-right">
+            <p className="text-label text-text-muted">Available</p>
+            <p className="font-mono text-base font-semibold leading-tight text-accent-watt">{fmtPrice(vltBalance)} VLT</p>
+          </div>
+        </div>
+      </header>
+
+      {/* Horizontal shop shelves free the full width for products and do not read like admin navigation. */}
+      <nav
+        className="relative flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0"
+        aria-label="Shop categories"
+      >
+        {CATEGORIES.map(function (cat) {
+          var isActive = activeCategory === cat.key;
+          var catAccent = cat.key === 'promotions' ? '#F5923B' : cat.key === 'supports' ? '#6FB7D6' : '#F2B84B';
+          return (
+            <button
+              key={cat.key}
+              type="button"
+              onClick={function () { setActiveCategory(cat.key); }}
+              aria-pressed={isActive}
+              className={
+                'group relative flex min-w-[145px] flex-1 items-center justify-center gap-2 overflow-hidden border-2 px-3 py-3 font-semibold ' +
+                'transition-all duration-200 sm:min-w-0 ' +
+                (isActive
+                  ? 'border-line-dusk bg-bg-panel text-text-primary shadow-pixel-sm -translate-y-0.5'
+                  : 'border-transparent bg-bg-abyss/40 text-text-muted hover:-translate-y-0.5 hover:border-line-dusk hover:bg-bg-panel/70 hover:text-text-primary')
+              }
+            >
+              <span
+                className="grid h-8 w-8 shrink-0 place-items-center border transition-all duration-200 group-hover:scale-110"
+                style={{
+                  color: catAccent,
+                  borderColor: isActive ? withAlpha(catAccent, 0.55) : 'transparent',
+                  background: isActive ? withAlpha(catAccent, 0.14) : 'transparent',
+                }}
+              >
+                {cat.icon}
+              </span>
+              <span className="truncate text-sm">{cat.label}</span>
+              <span
+                aria-hidden="true"
+                className="absolute inset-x-0 bottom-0 h-1 transition-opacity duration-200"
+                style={{ background: catAccent, opacity: isActive ? 1 : 0 }}
+              />
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Product shelf. Each category remounts, so the entrance animation replays naturally. */}
+      <div className="relative mt-7">
+        {activeCategory === 'generators' && (
+          <section key="generators" className="animate-shop-enter">
+            <div className="mb-4 flex items-center gap-3">
+              <h2 className="text-heading-lg" style={{ color: sectionAccent }}>⚡ GENERATORS</h2>
+              <span className="h-px flex-1" style={{ background: withAlpha(sectionAccent, 0.28) }} />
+            </div>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {genCatalog.map(function (item) {
+                var meta = GENERATOR_META[item.type] || {};
+                return (
+                  <ShopCard key={item.type}
+                    item={{ ...item, label: meta.label, description: '+' + (meta.baseW || item.baseW || 0) + ' W/s production' }}
+                    color={meta.color} img={meta.img}
+                    owned={ownedMap[item.type] || 0} isGenerator vltBalance={vltBalance} onBuy={handleBuy} loading={loading} />
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {activeCategory === 'promotions' && (
+          <section key="promotions" className="animate-shop-enter">
+            <div className="mb-4 flex items-center gap-3">
+              <h2 className="text-heading-lg" style={{ color: sectionAccent }}>🔥 PROMOTIONS</h2>
+              <span className="h-px flex-1" style={{ background: withAlpha(sectionAccent, 0.28) }} />
+            </div>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {PROMOTIONS.map(function (item) {
+                return (
+                  <ShopCard key={item.id} item={item} color={item.color} img={item.img}
+                    owned={0} isPromo vltBalance={vltBalance} loading={false}
+                    onBuy={function () {
+                      // Bundles are not implemented server-side yet. A blocking
+                      // window.alert for that is heavy-handed; this is the same
+                      // information without stopping the page.
+                      notify.info(item.label, 'Bundles are not available yet — coming soon.');
+                    }} />
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {activeCategory === 'supports' && (
+          <section key="supports" className="animate-shop-enter">
+            <div className="mb-4 flex items-center gap-3">
+              <h2 className="text-heading-lg" style={{ color: sectionAccent }}>🔧 SUPPORTS</h2>
+              <span className="h-px flex-1" style={{ background: withAlpha(sectionAccent, 0.28) }} />
+            </div>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {SUPPORTS.map(function (item) {
+                return (
+                  <ShopCard key={item.id} item={item} color={item.color} img={item.img}
+                    owned={ownedMap[item.id] || 0} isSupport vltBalance={vltBalance} onBuy={handleBuy} loading={loading} />
+                );
+              })}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );

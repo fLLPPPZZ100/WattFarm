@@ -102,6 +102,12 @@ export default {
           '0%, 100%': { opacity: '0.15' },
           '50%': { opacity: '0.8' },
         },
+        // Shop shelf entering after a category change. Small vertical travel
+        // keeps the transition tactile without making products bounce.
+        'shop-enter': {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
         /* ── Notifications ────────────────────────────────────────────
            The stack sits against the left edge of the content area, so a
            notification enters and leaves along that edge rather than dropping
@@ -134,6 +140,7 @@ export default {
         blink: 'blink 1.1s steps(1, end) infinite',
         'bar-sweep': 'bar-sweep 1.1s steps(8, end) infinite',
         twinkle: 'twinkle 3s ease-in-out infinite',
+        'shop-enter': 'shop-enter 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both',
         /**
          * Stepped like the rest of the interface, but with enough steps
          * (~27ms each) that the slide still reads as smooth rather than
